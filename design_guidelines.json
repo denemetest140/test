@@ -1,0 +1,106 @@
+{
+  "theme": "dark",
+  "archetype": "Swiss & High-Contrast (Archetype 4) mixed with Jewel & Luxury (Archetype 5)",
+  "brand_name": "Coinberx",
+  "language": "tr",
+  "colors": {
+    "background": "#070A0F",
+    "surface": "#11151E",
+    "surface_hover": "#1A202C",
+    "border": "#1F2633",
+    "border_focus": "#DCA335",
+    "primary": "#DCA335",
+    "primary_hover": "#F5B841",
+    "primary_text": "#000000",
+    "text_main": "#F8FAFC",
+    "text_muted": "#94A3B8",
+    "success": "#10B981",
+    "success_bg": "rgba(16, 185, 129, 0.1)",
+    "danger": "#EF4444",
+    "danger_bg": "rgba(239, 68, 68, 0.1)",
+    "warning": "#F59E0B"
+  },
+  "typography": {
+    "headings": {
+      "font_family": "Outfit, sans-serif",
+      "weights": ["400", "500", "700"],
+      "tracking": "tracking-tight"
+    },
+    "body": {
+      "font_family": "IBM Plex Sans, sans-serif",
+      "weights": ["400", "500"]
+    },
+    "monospace": {
+      "font_family": "JetBrains Mono, monospace",
+      "usage": "Order book, tickers, exact pricing, wallet balances"
+    }
+  },
+  "spacing_and_layout": {
+    "general_strategy": "Control Room Grid Protocol. Dense data needs structured hierarchy.",
+    "container_padding": "p-6 lg:p-8",
+    "trading_view_gap": "gap-2 lg:gap-4",
+    "dashboard_view_gap": "gap-6",
+    "border_radius": {
+      "cards": "rounded-xl",
+      "buttons": "rounded-lg",
+      "inputs": "rounded-md",
+      "badges": "rounded-full"
+    }
+  },
+  "micro_themes": {
+    "header": "Glassmorphism: bg-[#070A0F]/80 backdrop-blur-xl border-b border-[#1F2633]",
+    "cards": "Solid surface: bg-[#11151E] border border-[#1F2633] shadow-sm",
+    "trading_panels": "Strict grid: border-collapse, minimal internal padding (p-3), monospace fonts for numbers",
+    "inputs": "Flat solid: bg-[#0B0E14] border border-[#1F2633] focus:border-[#DCA335] focus:ring-1 focus:ring-[#DCA335]"
+  },
+  "components": {
+    "buttons": "Shadcn based. Primary: bg-[#DCA335] text-black hover:bg-[#F5B841]. Secondary: bg-transparent border border-[#1F2633] text-[#F8FAFC] hover:bg-[#1A202C].",
+    "tables": "Shadcn Table. Zebra striping for order books to aid readability. Hover effects on rows.",
+    "charts": "Recharts or lightweight TradingView widget for candlesticks. Use #10B981 for up candles, #EF4444 for down.",
+    "tabs": "Underline style instead of pills for a more professional 'exchange' feel. Active tab border-bottom 2px #DCA335.",
+    "toast": "Sonner. Dark themed, borders matching the status (e.g., green border for success)."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Duotone for marketing/empty states, Regular/Fill for functional dashboard elements."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1732111816779-aeec50f788ba?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwyfHxiaXRjb2luJTIwZGFyayUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc2NjU2MzIyfDA&ixlib=rb-4.1.0&q=85",
+        "category": "auth_background",
+        "description": "Shiny bitcoin logo on black background. Use for Login/Register split screen."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1762279389042-9439bfb6c155?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwxfHxkYXJrJTIwYWJzdHJhY3QlMjB0ZWNobm9sb2d5JTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzY2NTYzMzB8MA&ixlib=rb-4.1.0&q=85",
+        "category": "abstract_background",
+        "description": "Abstract neon lines forming a digital landscape. Use selectively for marketing headers or empty states."
+      }
+    ]
+  },
+  "turkish_glossary_reference": {
+    "dashboard": "Gösterge Paneli",
+    "trade": "Al-Sat",
+    "markets": "Piyasalar",
+    "wallet": "Cüzdan",
+    "deposit": "Yatırma",
+    "withdraw": "Çekme",
+    "orders": "Siparişler",
+    "buy": "Al",
+    "sell": "Sat",
+    "balance": "Bakiye",
+    "portfolio_value": "Portföy Değeri"
+  },
+  "instructions_to_main_agent": [
+    "Ensure the entire application is in Turkish as requested.",
+    "Install specific fonts via CDN or NPM: Outfit, IBM Plex Sans, JetBrains Mono.",
+    "Use @phosphor-icons/react for icons.",
+    "Implement pure dark mode using the provided color hexes. Do not use generic Tailwind 'gray' or 'slate' without overriding them to the custom navy-black theme (#070A0F base).",
+    "For the trading view, utilize a rigid multi-column layout (e.g., Left: Pairs/Markets, Middle: Chart & Order Entry, Right: Order Book & Recent Trades).",
+    "Ensure all numbers in tables, order books, and price tickers use tabular-nums and JetBrains Mono.",
+    "Implement 'data-testid' on all interactive elements like buttons, inputs, tabs, and table rows.",
+    "Use standard HTML inputs for simple text, but Shadcn UI components for dropdowns, selects, and dialogs.",
+    "Build the KYC upload zones with clear dashed borders and intuitive drag-and-drop aesthetics.",
+    "In the Deposit (Yatırma) section, ensure the IBAN, Reference Code, and Dekont (receipt) upload are distinct, secure-looking steps."
+  ]
+}
