@@ -1,54 +1,73 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import "./App.css";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Toaster } from "sonner";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Layout from "./components/Layout";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import Landing from "./pages/Landing";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import VerifyEmail from "./pages/VerifyEmail";
+import AuthCallback from "./pages/AuthCallback";
+import Dashboard from "./pages/Dashboard";
+import Markets from "./pages/Markets";
+import Trade from "./pages/Trade";
+import Wallet from "./pages/Wallet";
+import Deposit from "./pages/Deposit";
+import Withdraw from "./pages/Withdraw";
+import History from "./pages/History";
+import KYC from "./pages/KYC";
+import Profile from "./pages/Profile";
+import Watchlist from "./pages/Watchlist";
+import Admin from "./pages/Admin";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+const Gated = ({ children }) => (
+  <ProtectedRoute>
+    <Layout>{children}</Layout>
+  </ProtectedRoute>
+);
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+function Root() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen bg-[#070A0F]" />;
+  return user ? <Navigate to="/dashboard" replace /> : <Landing />;
+}
 
+function AppRouter() {
+  const location = useLocation();
+  if (location.hash?.includes("session_id=")) return <AuthCallback />;
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+    <Routes>
+      <Route path="/" element={<Root />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
 
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+      <Route path="/dashboard" element={<Gated><Dashboard /></Gated>} />
+      <Route path="/markets" element={<Gated><Markets /></Gated>} />
+      <Route path="/trade/:symbol" element={<Gated><Trade /></Gated>} />
+      <Route path="/wallet" element={<Gated><Wallet /></Gated>} />
+      <Route path="/deposit" element={<Gated><Deposit /></Gated>} />
+      <Route path="/withdraw" element={<Gated><Withdraw /></Gated>} />
+      <Route path="/history" element={<Gated><History /></Gated>} />
+      <Route path="/kyc" element={<Gated><KYC /></Gated>} />
+      <Route path="/profile" element={<Gated><Profile /></Gated>} />
+      <Route path="/watchlist" element={<Gated><Watchlist /></Gated>} />
+      <Route path="/admin" element={<ProtectedRoute adminOnly><Layout><Admin /></Layout></ProtectedRoute>} />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRouter />
+        <Toaster theme="dark" position="top-right" richColors closeButton />
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
