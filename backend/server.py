@@ -710,6 +710,11 @@ async def market_detail(symbol: str):
     return t
 
 
+@api.get("/markets/{symbol}/sparkline")
+async def market_sparkline(symbol: str, points: int = 24):
+    return {"symbol": symbol.upper(), "points": await mkt.fetch_sparkline(symbol, points)}
+
+
 @api.get("/markets/{symbol}/klines")
 async def market_klines(symbol: str, interval: str = "1h", limit: int = 200):
     return await mkt.fetch_klines(symbol, interval, limit)

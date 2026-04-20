@@ -24,6 +24,26 @@ SUPPORTED_COINS = [
     {"symbol": "MATIC", "name": "Polygon"},
     {"symbol": "LTC", "name": "Litecoin"},
     {"symbol": "SHIB", "name": "Shiba Inu"},
+    {"symbol": "ATOM", "name": "Cosmos"},
+    {"symbol": "NEAR", "name": "NEAR Protocol"},
+    {"symbol": "UNI", "name": "Uniswap"},
+    {"symbol": "APT", "name": "Aptos"},
+    {"symbol": "ARB", "name": "Arbitrum"},
+    {"symbol": "OP", "name": "Optimism"},
+    {"symbol": "FIL", "name": "Filecoin"},
+    {"symbol": "ICP", "name": "Internet Computer"},
+    {"symbol": "ETC", "name": "Ethereum Classic"},
+    {"symbol": "XLM", "name": "Stellar"},
+    {"symbol": "HBAR", "name": "Hedera"},
+    {"symbol": "VET", "name": "VeChain"},
+    {"symbol": "ALGO", "name": "Algorand"},
+    {"symbol": "INJ", "name": "Injective"},
+    {"symbol": "AAVE", "name": "Aave"},
+    {"symbol": "SUI", "name": "Sui"},
+    {"symbol": "RNDR", "name": "Render"},
+    {"symbol": "GRT", "name": "The Graph"},
+    {"symbol": "SAND", "name": "The Sandbox"},
+    {"symbol": "PEPE", "name": "Pepe"},
 ]
 
 COIN_META = {c["symbol"]: c for c in SUPPORTED_COINS}
@@ -192,6 +212,31 @@ async def fetch_order_book(symbol: str, limit: int = 20) -> dict:
         "bids": [[float(p) * scale, float(q)] for p, q in raw["bids"]],
         "asks": [[float(p) * scale, float(q)] for p, q in raw["asks"]],
     }
+
+
+async def fetch_sparkline(symbol: str, points: int = 24) -> list[float]:
+    """Returns last `points` hourly closes in TRY, cached for 1 minute."""
+    cache_key = f"spark:{symbol}:{points}"
+    cached = _cache_get(cache_key, 60)
+    if cached is not None:
+        return cached
+    symbol = symbol.upper()
+    if symbol == "USDT":
+        binance_symbol = "USDTTRY"
+        scale = 1.0
+    else:
+        binance_symbol = f"{symbol}USDT"
+        scale = await get_usdt_try()
+    try:
+        raw = await _fetch(
+            f"{BINANCE_BASE}/api/v3/klines",
+            {"symbol": binance_symbol, "interval": "1h", "limit": points},
+        )
+    except Exception:
+        return []
+    closes = [float(c[4]) * scale for c in raw]
+    _cache_set(cache_key, closes)
+    return closes
 
 
 async def fetch_recent_trades(symbol: str, limit: int = 30) -> list[dict]:
