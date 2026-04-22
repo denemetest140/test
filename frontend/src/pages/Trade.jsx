@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { api, formatTRY, formatNumber, formatPct, errToStr } from "../lib/api";
 import { createChart, CandlestickSeries } from "lightweight-charts";
 import { toast } from "sonner";
+import { MagnifyingGlass, CaretDown, Star } from "@phosphor-icons/react";
 
 const INTERVALS = [["5m","5dk"],["15m","15dk"],["1h","1sa"],["4h","4sa"],["1d","1g"]];
 
 export default function Trade() {
   const { symbol = "BTC" } = useParams();
   const sym = symbol.toUpperCase();
+  const nav = useNavigate();
   const [interval, setInterval_] = useState("1h");
   const [ticker, setTicker] = useState(null);
+  const [allMarkets, setAllMarkets] = useState([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [depth, setDepth] = useState({ bids: [], asks: [] });
   const [trades, setTrades] = useState([]);
   const [wallet, setWallet] = useState(null);
@@ -30,6 +35,7 @@ export default function Trade() {
     api.get(`/markets/${sym}/trades`).then((r) => setTrades(r.data || [])).catch(() => {});
     api.get("/wallet").then((r) => setWallet(r.data)).catch(() => {});
     api.get("/trade/orders?status=open").then((r) => setOpenOrders(r.data || [])).catch(() => {});
+    api.get("/markets").then((r) => setAllMarkets(r.data || [])).catch(() => {});
   };
 
   useEffect(() => {
@@ -72,13 +78,22 @@ export default function Trade() {
     });
   }, [sym, interval]);
 
-  const balTRY = wallet?.assets.find((a) => a.symbol === "TRY")?.amount ?? 0;
-  const balCoin = wallet?.assets.find((a) => a.symbol === sym)?.amount ?? 0;
+  const balTRY = wallet?.assets?.find((a) => a.symbol === "TRY")?.amount ?? 0;
+  const balCoin = wallet?.assets?.find((a) => a.symbol === sym)?.amount ?? 0;
+  const smallPrice = (ticker?.price_try ?? 1) < 1;
 
   const estQty = useMemo(() => {
     if (orderType === "market" && side === "buy" && ticker && amount) return Number(amount) / ticker.price_try;
     return qty ? Number(qty) : 0;
   }, [orderType, side, amount, qty, ticker]);
+
+  const filteredPicker = useMemo(() => {
+    if (!allMarkets) return [];
+    const q = search.toLowerCase();
+    return allMarkets
+      .filter((m) => !q || m.symbol.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
+      .sort((a, b) => b.volume_24h_try - a.volume_24h_try);
+  }, [allMarkets, search]);
 
   const submit = async () => {
     try {
@@ -101,16 +116,73 @@ export default function Trade() {
     try { await api.post(`/trade/orders/${id}/cancel`); loadAll(); toast.success("İptal edildi"); } catch (e) { toast.error(errToStr(e)); }
   };
 
+  const fmtP = (v) => formatTRY(v, smallPrice || v < 1 ? 6 : 2);
+
   return (
     <div className="p-4 lg:p-6 anim-fade-up">
-      <div className="card-surface p-4 mb-4 flex flex-wrap items-center gap-6">
-        <Link to="/markets" className="text-xs text-[#94A3B8] hover:text-white" data-testid="trade-back">&larr; Piyasalar</Link>
-        <div className="font-display text-xl">{sym}/TRY</div>
-        <div className="tabular text-lg" data-testid="trade-price">{formatTRY(ticker?.price_try ?? 0)}</div>
+      <div className="card-surface p-4 mb-4 flex flex-wrap items-center gap-4 relative">
+        <div className="relative">
+          <button onClick={() => setPickerOpen((v) => !v)} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#11151E]" data-testid="trade-picker-btn">
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${sym==="BERX"?"bg-[#DCA335]/20 text-[#DCA335]":"bg-[#1F2633]"}`}>{sym.slice(0,2)}</div>
+            <div className="text-left">
+              <div className="font-display text-base leading-none">{sym}/TRY</div>
+              <div className="text-[10px] text-[#94A3B8]">{ticker?.name || ""}</div>
+            </div>
+            <CaretDown size={12} weight="bold" className="text-[#94A3B8]"/>
+          </button>
+          {pickerOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setPickerOpen(false)} />
+              <div className="absolute z-40 top-14 left-0 w-80 card-surface p-2">
+                <div className="flex items-center gap-2 px-2 py-1.5 bg-[#0B0E14] border border-[#1F2633] rounded-md mb-2">
+                  <MagnifyingGlass size={14} className="text-[#94A3B8]" />
+                  <input
+                    autoFocus
+                    data-testid="trade-picker-search"
+                    className="bg-transparent outline-none text-sm flex-1 py-1"
+                    placeholder="Coin ara..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                <div className="max-h-[360px] overflow-y-auto scrollbar-thin">
+                  {filteredPicker.slice(0, 50).map((m) => {
+                    const up = m.change_24h >= 0;
+                    return (
+                      <button
+                        key={m.symbol}
+                        onClick={() => { nav(`/trade/${m.symbol}`); setPickerOpen(false); setSearch(""); }}
+                        className={`w-full flex items-center justify-between px-2 py-2 rounded hover:bg-[#1A202C] text-left ${m.symbol===sym?"bg-[#11151E]":""}`}
+                        data-testid={`trade-pick-${m.symbol}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold ${m.symbol==="BERX"?"bg-[#DCA335]/20 text-[#DCA335]":"bg-[#1F2633]"}`}>{m.symbol.slice(0,2)}</div>
+                          <div>
+                            <div className="text-sm">{m.symbol}/TRY</div>
+                            <div className="text-[10px] text-[#94A3B8]">{m.name}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="tabular text-xs">{formatTRY(m.price_try, m.price_try<1?6:2)}</div>
+                          <div className={`tabular text-[10px] ${up?"text-[#10B981]":"text-[#EF4444]"}`}>{formatPct(m.change_24h)}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        <Link to="/markets" className="text-xs text-[#94A3B8] hover:text-white" data-testid="trade-back">← Piyasalar</Link>
+        <div className="tabular text-lg" data-testid="trade-price">{fmtP(ticker?.price_try ?? 0)}</div>
         <div className={`tabular text-sm ${(ticker?.change_24h ?? 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]"}`} data-testid="trade-change">{formatPct(ticker?.change_24h ?? 0)}</div>
-        <div className="hidden md:block text-xs text-[#94A3B8]">24s Yüksek <span className="tabular text-white">{formatTRY(ticker?.high_24h_try ?? 0)}</span></div>
-        <div className="hidden md:block text-xs text-[#94A3B8]">24s Düşük <span className="tabular text-white">{formatTRY(ticker?.low_24h_try ?? 0)}</span></div>
+        <div className="hidden md:block text-xs text-[#94A3B8]">24s Yüksek <span className="tabular text-white">{fmtP(ticker?.high_24h_try ?? 0)}</span></div>
+        <div className="hidden md:block text-xs text-[#94A3B8]">24s Düşük <span className="tabular text-white">{fmtP(ticker?.low_24h_try ?? 0)}</span></div>
         <div className="hidden lg:block text-xs text-[#94A3B8]">24s Hacim <span className="tabular text-white">{formatTRY(ticker?.volume_24h_try ?? 0, 0)}</span></div>
+        {sym === "BERX" && (
+          <span className="chip text-[10px] text-[#DCA335]"><Star size={10} weight="fill"/> Coinberx Özel Coini</span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -125,22 +197,20 @@ export default function Trade() {
 
         <div className="card-surface p-3 lg:col-span-2 font-mono text-xs">
           <div className="text-[#94A3B8] mb-1">Emir Defteri</div>
-          <div className="grid grid-cols-2 text-[10px] text-[#94A3B8] mb-1">
-            <span>Fiyat</span><span className="text-right">Miktar</span>
-          </div>
+          <div className="grid grid-cols-2 text-[10px] text-[#94A3B8] mb-1"><span>Fiyat</span><span className="text-right">Miktar</span></div>
           <div className="space-y-0.5">
             {depth.asks.slice(0, 10).reverse().map((a, i) => (
               <div key={i} className="grid grid-cols-2 tabular" data-testid={`ask-row-${i}`}>
-                <span className="text-[#EF4444]">{formatTRY(a[0], sym==="SHIB"?6:2)}</span>
+                <span className="text-[#EF4444]">{fmtP(a[0])}</span>
                 <span className="text-right text-[#94A3B8]">{a[1].toFixed(4)}</span>
               </div>
             ))}
           </div>
-          <div className="py-1 my-1 text-center tabular text-[#DCA335] border-y border-[#1F2633]">{formatTRY(ticker?.price_try ?? 0)}</div>
+          <div className="py-1 my-1 text-center tabular text-[#DCA335] border-y border-[#1F2633]">{fmtP(ticker?.price_try ?? 0)}</div>
           <div className="space-y-0.5">
             {depth.bids.slice(0, 10).map((b, i) => (
               <div key={i} className="grid grid-cols-2 tabular" data-testid={`bid-row-${i}`}>
-                <span className="text-[#10B981]">{formatTRY(b[0], sym==="SHIB"?6:2)}</span>
+                <span className="text-[#10B981]">{fmtP(b[0])}</span>
                 <span className="text-right text-[#94A3B8]">{b[1].toFixed(4)}</span>
               </div>
             ))}
@@ -152,7 +222,7 @@ export default function Trade() {
           <div className="space-y-0.5 max-h-[520px] overflow-y-auto scrollbar-thin">
             {trades.map((t, i) => (
               <div key={i} className="grid grid-cols-3 tabular">
-                <span className={t.is_buyer_maker ? "text-[#EF4444]" : "text-[#10B981]"}>{formatTRY(t.price)}</span>
+                <span className={t.is_buyer_maker ? "text-[#EF4444]" : "text-[#10B981]"}>{fmtP(t.price)}</span>
                 <span className="text-right text-[#94A3B8]">{t.qty.toFixed(4)}</span>
                 <span className="text-right text-[#94A3B8]">{new Date(t.time*1000).toLocaleTimeString("tr-TR")}</span>
               </div>
@@ -174,7 +244,7 @@ export default function Trade() {
           {orderType === "limit" && (
             <>
               <label className="text-xs text-[#94A3B8]">Fiyat (TRY)</label>
-              <input data-testid="order-price" type="number" className="input-field mt-1 mb-3 tabular" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={ticker?.price_try.toFixed(2)} />
+              <input data-testid="order-price" type="number" className="input-field mt-1 mb-3 tabular" value={price} onChange={(e) => setPrice(e.target.value)} step="any" />
             </>
           )}
           {side === "buy" && orderType === "market" ? (

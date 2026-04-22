@@ -44,6 +44,21 @@ SUPPORTED_COINS = [
     {"symbol": "GRT", "name": "The Graph"},
     {"symbol": "SAND", "name": "The Sandbox"},
     {"symbol": "PEPE", "name": "Pepe"},
+    {"symbol": "TON", "name": "Toncoin"},
+    {"symbol": "MKR", "name": "Maker"},
+    {"symbol": "FET", "name": "Fetch.ai"},
+    {"symbol": "TIA", "name": "Celestia"},
+    {"symbol": "STX", "name": "Stacks"},
+    {"symbol": "CHZ", "name": "Chiliz"},
+    {"symbol": "CRV", "name": "Curve"},
+    {"symbol": "LDO", "name": "Lido DAO"},
+    {"symbol": "IMX", "name": "Immutable"},
+    {"symbol": "FLOW", "name": "Flow"},
+    {"symbol": "APE", "name": "ApeCoin"},
+    {"symbol": "MANA", "name": "Decentraland"},
+    {"symbol": "CAKE", "name": "PancakeSwap"},
+    {"symbol": "AXS", "name": "Axie Infinity"},
+    {"symbol": "GALA", "name": "Gala"},
 ]
 
 COIN_META = {c["symbol"]: c for c in SUPPORTED_COINS}

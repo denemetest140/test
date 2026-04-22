@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, formatTRY, errToStr } from "../lib/api";
 import { toast } from "sonner";
 
-const TABS = [["overview","Özet"],["users","Kullanıcılar"],["kyc","KYC"],["deposits","Yatırmalar"],["withdrawals","Çekmeler"],["settings","Ayarlar"]];
+const TABS = [["overview","Özet"],["users","Kullanıcılar"],["kyc","KYC"],["deposits","Yatırmalar"],["withdrawals","Çekmeler"],["berx","BERX Coin"],["support","Destek"],["settings","Ayarlar"]];
 
 export default function Admin() {
   const [tab, setTab] = useState("overview");
@@ -152,6 +152,10 @@ export default function Admin() {
           </table>
         </div>
       )}
+      {tab === "berx" && <BerxPanel />}
+
+      {tab === "support" && <SupportPanel />}
+
       {tab === "settings" && settings && (
         <SettingsPanel settings={settings} onSave={async (updates) => {
           try { const { data } = await api.patch("/admin/settings", updates); setSettings(data); toast.success("Ayarlar güncellendi"); }
@@ -197,6 +201,141 @@ function SettingsPanel({ settings, onSave }) {
         </div>
       </div>
       <button data-testid="settings-save" onClick={() => onSave(local)} className="btn-primary px-5 py-2.5 rounded-lg text-sm">Kaydet</button>
+    </div>
+  );
+}
+
+
+function BerxPanel() {
+  const [info, setInfo] = useState(null);
+  const [klines, setKlines] = useState([]);
+  const [setPrice, setSetPrice] = useState("");
+  const [pct, setPct] = useState("");
+  const load = () => {
+    api.get("/admin/berx").then((r) => setInfo(r.data)).catch(() => {});
+    api.get("/markets/BERX/klines?interval=1h&limit=72").then((r) => setKlines(r.data || []));
+  };
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
+  const call = async (action, value) => {
+    try { await api.post("/admin/berx/price", { action, value: Number(value) }); toast.success("BERX güncellendi"); setSetPrice(""); setPct(""); load(); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+  const up = (info?.change_24h ?? 0) >= 0;
+  return (
+    <div className="grid lg:grid-cols-3 gap-4">
+      <div className="card-surface p-6">
+        <div className="text-xs text-[#94A3B8] mb-3">Mevcut BERX Fiyatı</div>
+        <div className="font-display text-4xl tabular text-[#DCA335]" data-testid="admin-berx-price">{formatTRY(info?.price_try ?? 0, 6)}</div>
+        <div className={`text-xs tabular mt-2 ${up?"text-[#10B981]":"text-[#EF4444]"}`}>{up?"+":""}{(info?.change_24h ?? 0).toFixed(2)}% (24s)</div>
+        <div className="grid grid-cols-2 gap-2 mt-5">
+          <div className="bg-[#0B0E14] border border-[#1F2633] rounded p-2"><div className="text-[10px] text-[#94A3B8]">24s Yüksek</div><div className="tabular text-xs">{formatTRY(info?.high_24h_try ?? 0, 6)}</div></div>
+          <div className="bg-[#0B0E14] border border-[#1F2633] rounded p-2"><div className="text-[10px] text-[#94A3B8]">24s Düşük</div><div className="tabular text-xs">{formatTRY(info?.low_24h_try ?? 0, 6)}</div></div>
+          <div className="bg-[#0B0E14] border border-[#1F2633] rounded p-2 col-span-2"><div className="text-[10px] text-[#94A3B8]">24s Hacim</div><div className="tabular text-xs">{formatTRY(info?.volume_24h_try ?? 0, 2)}</div></div>
+        </div>
+      </div>
+      <div className="card-surface p-6 lg:col-span-2">
+        <div className="text-xs text-[#94A3B8] mb-3">BERX Fiyat Kontrolü</div>
+        <div className="grid sm:grid-cols-2 gap-4 mb-5">
+          <div>
+            <label className="text-xs text-[#94A3B8]">Belirli Fiyata Ayarla (TRY)</label>
+            <div className="flex gap-2 mt-1">
+              <input data-testid="berx-set-price" type="number" step="0.0001" className="input-field tabular" value={setPrice} onChange={(e) => setSetPrice(e.target.value)} placeholder="örn. 1.2500" />
+              <button onClick={() => setPrice && call("set", setPrice)} className="btn-primary px-4 rounded-lg text-sm" data-testid="berx-set-submit">Uygula</button>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-[#94A3B8]">Yüzde ile Düzelt (±%)</label>
+            <div className="flex gap-2 mt-1">
+              <input data-testid="berx-pct-input" type="number" step="0.01" className="input-field tabular" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="örn. 5 veya -3" />
+              <button onClick={() => pct && call("adjust", pct)} className="btn-primary px-4 rounded-lg text-sm" data-testid="berx-pct-submit">Uygula</button>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[-5, -2, -1, 1, 2, 5, 10].map((p) => (
+            <button
+              key={p}
+              onClick={() => call("adjust", p)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium ${p>0?"bg-[#10B981]/15 text-[#10B981] hover:bg-[#10B981]/25":"bg-[#EF4444]/15 text-[#EF4444] hover:bg-[#EF4444]/25"}`}
+              data-testid={`berx-quick-${p}`}
+            >
+              {p>0?"+":""}{p}%
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 text-xs text-[#94A3B8]">Son 72 saat fiyat geçmişi ({klines.length} nokta)</div>
+        <div className="flex items-end gap-0.5 h-20 mt-2">
+          {klines.map((c, i) => {
+            const prev = klines[i - 1]?.close ?? c.close;
+            const up = c.close >= prev;
+            const min = Math.min(...klines.map((x) => x.close));
+            const max = Math.max(...klines.map((x) => x.close));
+            const h = ((c.close - min) / Math.max(max - min, 0.000001)) * 100;
+            return <div key={i} className={`flex-1 rounded-sm ${up?"bg-[#10B981]/70":"bg-[#EF4444]/70"}`} style={{ height: `${Math.max(5, h)}%` }} />;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SupportPanel() {
+  const [rows, setRows] = useState([]);
+  const [open, setOpen] = useState(null);
+  const [reply, setReply] = useState("");
+  const load = () => api.get("/admin/support").then((r) => setRows(r.data || []));
+  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, []);
+  const send = async (close) => {
+    if (!reply.trim()) return;
+    try { await api.post(`/admin/support/${open.message_id}/reply`, { body: reply, close: !!close }); toast.success("Yanıt gönderildi"); setReply(""); setOpen(null); load(); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+  const chip = (s) => ({open:"text-[#F59E0B] bg-[#F59E0B]/10", answered:"text-[#3B82F6] bg-[#3B82F6]/10", closed:"text-[#10B981] bg-[#10B981]/10"}[s] || "text-[#94A3B8] bg-[#1F2633]");
+  return (
+    <div className="grid lg:grid-cols-2 gap-4">
+      <div className="card-surface p-4">
+        <div className="text-xs text-[#94A3B8] mb-3">Gelen Mesajlar ({rows.length})</div>
+        <div className="space-y-2 max-h-[560px] overflow-y-auto scrollbar-thin">
+          {rows.map((m) => (
+            <button key={m.message_id} onClick={() => setOpen(m)} className={`w-full text-left p-3 rounded-lg border ${open?.message_id===m.message_id?"border-[#DCA335] bg-[#11151E]":"border-[#1F2633] bg-[#0B0E14] hover:border-[#2A3344]"}`} data-testid={`admin-msg-${m.message_id}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium">{m.subject}</div>
+                  <div className="text-xs text-[#94A3B8]">{m.user_email} · {m.category}</div>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${chip(m.status)}`}>{m.status}</span>
+              </div>
+              <div className="text-xs text-[#94A3B8] mt-1">{new Date(m.created_at).toLocaleString("tr-TR")}</div>
+            </button>
+          ))}
+          {rows.length === 0 && <div className="text-sm text-[#94A3B8] py-6 text-center">Mesaj yok</div>}
+        </div>
+      </div>
+      <div className="card-surface p-4">
+        {!open ? (
+          <div className="flex items-center justify-center h-full min-h-[300px] text-sm text-[#94A3B8]">Bir mesaj seçin</div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs text-[#94A3B8]">{open.user_name} · {open.user_email}</div>
+              <div className="font-display text-xl mt-1">{open.subject}</div>
+              <div className="text-xs text-[#94A3B8] mt-1">{new Date(open.created_at).toLocaleString("tr-TR")} · {open.category}</div>
+            </div>
+            <div className="bg-[#0B0E14] border border-[#1F2633] rounded-lg p-4 whitespace-pre-wrap text-sm">{open.body}</div>
+            {(open.replies || []).map((r, i) => (
+              <div key={i} className="bg-[#DCA335]/5 border border-[#DCA335]/30 rounded p-3">
+                <div className="text-[10px] text-[#DCA335] uppercase">Admin · {new Date(r.at).toLocaleString("tr-TR")}</div>
+                <div className="text-sm mt-1 whitespace-pre-wrap">{r.body}</div>
+              </div>
+            ))}
+            <textarea data-testid="admin-reply-body" value={reply} onChange={(e) => setReply(e.target.value)} className="input-field min-h-[100px]" placeholder="Yanıtınızı yazın..." />
+            <div className="flex gap-2">
+              <button onClick={() => send(false)} className="btn-primary px-4 py-2 rounded-lg text-sm" data-testid="admin-reply-send">Gönder</button>
+              <button onClick={() => send(true)} className="px-4 py-2 rounded-lg border border-[#1F2633] text-sm hover:bg-[#11151E]" data-testid="admin-reply-close">Gönder & Kapat</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

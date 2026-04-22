@@ -172,6 +172,69 @@ function HeatTile({ coin }) {
   );
 }
 
+// --- Horizontal scroll rail ---------------------------------------------------
+function RailCard({ coin, spark }) {
+  if (!coin) return null;
+  const up = coin.change_24h >= 0;
+  const data = (spark || []).map((c, i) => ({ i, c }));
+  return (
+    <Link
+      to={`/trade/${coin.symbol}`}
+      className="shrink-0 w-[240px] card-surface p-4 hover:border-[#DCA335]/60 transition-all group relative overflow-hidden"
+    >
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${coin.symbol==="BERX"?"bg-[#DCA335]/20 text-[#DCA335]":"bg-[#1F2633]"}`}>{coin.symbol.slice(0,2)}</div>
+        <div className="flex-1 min-w-0">
+          <div className="font-display text-base truncate">{coin.symbol}</div>
+          <div className="text-[11px] text-[#94A3B8] truncate">{coin.name}</div>
+        </div>
+        <Star size={14} className="text-[#2A3344] group-hover:text-[#DCA335]"/>
+      </div>
+      <div className="mt-3">
+        <div className="tabular text-lg">{formatTRY(coin.price_try, coin.price_try < 1 ? 6 : 2)}</div>
+        <div className={`tabular text-xs flex items-center gap-0.5 mt-0.5 ${up?"text-[#10B981]":"text-[#EF4444]"}`}>
+          {up?<ArrowUpRight size={10} weight="bold"/>:<ArrowDownRight size={10} weight="bold"/>}
+          {formatPct(coin.change_24h)}
+        </div>
+      </div>
+      <div className="h-12 mt-3 -mx-2">
+        <ResponsiveContainer>
+          <LineChart data={data}>
+            <Line dataKey="c" stroke={up?"#10B981":"#EF4444"} strokeWidth={1.8} dot={false} isAnimationActive={false}/>
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-2 py-1.5 rounded-md bg-[#DCA335] text-black text-xs font-semibold text-center opacity-0 group-hover:opacity-100 transition">
+        Al-Sat
+      </div>
+    </Link>
+  );
+}
+
+function CoinRail({ title, icon: Icon, tint, coins, sparks, onMount }) {
+  useEffect(() => { onMount && onMount(coins); }, [coins, onMount]);
+  const ref = useRef(null);
+  const scroll = (dir) => ref.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Icon size={16} weight="fill" className={tint}/>
+          <h3 className="font-display text-xl">{title}</h3>
+          <span className="chip text-[11px]">{coins.length}</span>
+        </div>
+        <div className="hidden sm:flex gap-1">
+          <button onClick={() => scroll(-1)} className="w-8 h-8 rounded border border-[#1F2633] flex items-center justify-center hover:bg-[#11151E]"><CaretRight size={12} weight="bold" className="rotate-180"/></button>
+          <button onClick={() => scroll(1)} className="w-8 h-8 rounded border border-[#1F2633] flex items-center justify-center hover:bg-[#11151E]"><CaretRight size={12} weight="bold"/></button>
+        </div>
+      </div>
+      <div ref={ref} className="flex gap-3 overflow-x-auto scrollbar-thin pb-2 snap-x">
+        {coins.slice(0, 15).map((c) => <div key={c.symbol} className="snap-start"><RailCard coin={c} spark={sparks[c.symbol]}/></div>)}
+      </div>
+    </div>
+  );
+}
+
 // --- Main Landing -----------------------------------------------------------
 export default function Landing() {
   const [coins, setCoins] = useState([]);
@@ -219,6 +282,20 @@ export default function Landing() {
   const topLoser = useMemo(() => coins.slice().sort((a,b)=>a.change_24h-b.change_24h)[0], [coins]);
   const topVolume = useMemo(() => coins.slice().sort((a,b)=>b.volume_24h_try-a.volume_24h_try)[0], [coins]);
   const trending = useMemo(() => coins.slice().sort((a,b)=>Math.abs(b.change_24h)-Math.abs(a.change_24h))[1] || topGainer, [coins, topGainer]);
+
+  const gainersList = useMemo(() => coins.slice().sort((a,b)=>b.change_24h-a.change_24h).slice(0,15), [coins]);
+  const losersList = useMemo(() => coins.slice().sort((a,b)=>a.change_24h-b.change_24h).slice(0,15), [coins]);
+  const trendingList = useMemo(() => coins.slice().sort((a,b)=>b.volume_24h_try-a.volume_24h_try).slice(0,15), [coins]);
+
+  const loadSparksFor = (list) => {
+    list.slice(0, 8).forEach(async (c) => {
+      if (sparks[c.symbol]) return;
+      try {
+        const { data } = await api.get(`/markets/${c.symbol}/sparkline?points=24`);
+        setSparks((s) => ({ ...s, [c.symbol]: data.points }));
+      } catch { /* ignore */ }
+    });
+  };
 
   const filteredTable = useMemo(() => {
     const list = coins.slice().sort((a,b)=>b.volume_24h_try-a.volume_24h_try);
@@ -310,10 +387,10 @@ export default function Landing() {
           <HighlightCard title="Trend Coin" icon={Sparkle} tint="bg-[#3B82F6]" coin={trending} spark={sparks[trending?.symbol]} />
         </div>
 
-        {/* Coin Table */}
-        <div className="mt-12 card-surface overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-[#1F2633]">
-            <div className="font-display text-lg">Tüm Piyasalar</div>
+        {/* Horizontal coin rails */}
+        <div className="mt-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h3 className="font-display text-2xl">Gruplar halinde piyasa</h3>
             <div className="flex items-center gap-2 bg-[#0B0E14] border border-[#1F2633] rounded-lg px-3">
               <MagnifyingGlass size={14} className="text-[#94A3B8]"/>
               <input
@@ -325,51 +402,40 @@ export default function Landing() {
               />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-[#94A3B8] text-left border-b border-[#1F2633]">
-                  <th className="py-3 px-4"><Star size={12}/></th>
-                  <th>Coin</th>
-                  <th className="text-right">Fiyat</th>
-                  <th className="text-right">24s %</th>
-                  <th className="text-right hidden md:table-cell">24s Hacim</th>
-                  <th className="text-right hidden lg:table-cell">24s Yüksek</th>
-                  <th className="text-right hidden lg:table-cell">24s Düşük</th>
-                  <th className="text-right pr-4"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1F2633]">
-                {filteredTable.map((m) => {
-                  const up = m.change_24h >= 0;
-                  const flash = flashes[m.symbol];
-                  return (
-                    <tr key={m.symbol} className={`hover:bg-[#1A202C] ${flash==="up"?"flash-up":flash==="down"?"flash-down":""}`} data-testid={`landing-row-${m.symbol}`}>
-                      <td className="px-4"><Star size={14} className="text-[#2A3344]"/></td>
-                      <td className="py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-[#1F2633] text-[10px] flex items-center justify-center font-semibold">{m.symbol.slice(0,2)}</div>
-                          <div>
-                            <div className="font-medium">{m.symbol} <span className="text-[#94A3B8] text-xs">/ TRY</span></div>
-                            <div className="text-xs text-[#94A3B8]">{m.name}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="tabular text-right">{formatTRY(m.price_try, m.price_try < 1 ? 6 : 2)}</td>
-                      <td className={`tabular text-right ${up?"text-[#10B981]":"text-[#EF4444]"}`}>{formatPct(m.change_24h)}</td>
-                      <td className="tabular text-right hidden md:table-cell text-[#94A3B8]">{formatTRY(m.volume_24h_try, 0)}</td>
-                      <td className="tabular text-right hidden lg:table-cell text-[#94A3B8]">{formatTRY(m.high_24h_try)}</td>
-                      <td className="tabular text-right hidden lg:table-cell text-[#94A3B8]">{formatTRY(m.low_24h_try)}</td>
-                      <td className="text-right pr-4">
-                        <Link to="/register" className="px-3 py-1.5 rounded-md bg-[#DCA335] hover:bg-[#F5B841] text-black text-xs font-semibold" data-testid={`landing-trade-${m.symbol}`}>Al-Sat</Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {filteredTable.length === 0 && <div className="p-10 text-center text-sm text-[#94A3B8]">Sonuç yok</div>}
-          </div>
+
+          {query ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {filteredTable.slice(0, 20).map((c) => <RailCard key={c.symbol} coin={c} spark={sparks[c.symbol]}/>)}
+              {filteredTable.length === 0 && <div className="col-span-full text-sm text-[#94A3B8] py-6 text-center">Sonuç yok</div>}
+            </div>
+          ) : (
+            <>
+              <CoinRail
+                title="Yükselenler"
+                icon={TrendUp}
+                tint="text-[#10B981]"
+                coins={gainersList}
+                sparks={sparks}
+                onMount={loadSparksFor}
+              />
+              <CoinRail
+                title="Düşenler"
+                icon={TrendDown}
+                tint="text-[#EF4444]"
+                coins={losersList}
+                sparks={sparks}
+                onMount={loadSparksFor}
+              />
+              <CoinRail
+                title="Trend Coinler"
+                icon={Flame}
+                tint="text-[#DCA335]"
+                coins={trendingList}
+                sparks={sparks}
+                onMount={loadSparksFor}
+              />
+            </>
+          )}
         </div>
 
         {/* Heatmap */}

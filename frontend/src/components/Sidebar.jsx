@@ -10,6 +10,7 @@ import {
   User,
   ShieldCheck,
   Star,
+  Headset,
 } from "@phosphor-icons/react";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -23,6 +24,7 @@ const navItems = [
   { to: "/history", label: "Geçmiş", icon: Clock, testid: "nav-history" },
   { to: "/kyc", label: "KYC Doğrulama", icon: IdentificationCard, testid: "nav-kyc" },
   { to: "/watchlist", label: "İzleme Listesi", icon: Star, testid: "nav-watchlist" },
+  { to: "/support", label: "Destek", icon: Headset, testid: "nav-support" },
   { to: "/profile", label: "Profil", icon: User, testid: "nav-profile" },
 ];
 

@@ -39,6 +39,7 @@ from starlette.middleware.cors import CORSMiddleware
 from storage import init_storage, put_object, get_object
 from email_service import send_email, render_verification, render_status
 import market_data as mkt
+import berx
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -164,8 +165,14 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
 async def ensure_wallet(user_id: str):
     existing = await db.wallets.find_one({"user_id": user_id})
     if existing:
+        # make sure BERX field exists
+        if "BERX" not in existing.get("balances", {}):
+            await db.wallets.update_one(
+                {"user_id": user_id},
+                {"$set": {"balances.BERX": 0.0, "locked.BERX": 0.0}},
+            )
         return
-    balances = {"TRY": 0.0}
+    balances = {"TRY": 0.0, "BERX": 0.0}
     for coin in mkt.SUPPORTED_COINS:
         balances[coin["symbol"]] = 0.0
     await db.wallets.insert_one(
@@ -251,6 +258,22 @@ class SettingsIn(BaseModel):
     trading_fee: Optional[float] = None
     min_deposit_try: Optional[float] = None
     min_withdrawal_try: Optional[float] = None
+
+
+class BerxAdjustIn(BaseModel):
+    action: str  # "set" | "adjust"
+    value: float  # absolute price for "set", percent for "adjust"
+
+
+class SupportMessageIn(BaseModel):
+    subject: str
+    body: str
+    category: Optional[str] = "general"
+
+
+class SupportReplyIn(BaseModel):
+    body: str
+    close: Optional[bool] = False
 
 
 DEFAULT_SETTINGS = {
@@ -544,6 +567,7 @@ async def get_wallet(user: dict = Depends(get_current_user)):
     w = await db.wallets.find_one({"user_id": user["user_id"]}, {"_id": 0})
     tickers = await mkt.fetch_all_tickers()
     price_map = {t["symbol"]: t["price_try"] for t in tickers}
+    price_map["BERX"] = await berx.get_berx_price(db)
     assets = []
     total_try = 0.0
     for sym, amt in w["balances"].items():
@@ -699,11 +723,16 @@ async def my_withdrawals(user: dict = Depends(get_current_user)):
 # -------------- Market data --------------
 @api.get("/markets")
 async def markets():
-    return await mkt.fetch_all_tickers()
+    rows = await mkt.fetch_all_tickers()
+    berx_ticker = await berx.get_ticker(db)
+    rows.insert(0, berx_ticker) if False else rows.append(berx_ticker)
+    return rows
 
 
 @api.get("/markets/{symbol}")
 async def market_detail(symbol: str):
+    if symbol.upper() == "BERX":
+        return await berx.get_ticker(db)
     t = await mkt.fetch_ticker(symbol)
     if not t:
         raise HTTPException(status_code=404, detail="Coin bulunamadı")
@@ -712,21 +741,29 @@ async def market_detail(symbol: str):
 
 @api.get("/markets/{symbol}/sparkline")
 async def market_sparkline(symbol: str, points: int = 24):
+    if symbol.upper() == "BERX":
+        return {"symbol": "BERX", "points": await berx.get_sparkline(db, points)}
     return {"symbol": symbol.upper(), "points": await mkt.fetch_sparkline(symbol, points)}
 
 
 @api.get("/markets/{symbol}/klines")
 async def market_klines(symbol: str, interval: str = "1h", limit: int = 200):
+    if symbol.upper() == "BERX":
+        return await berx.get_klines(db, interval, limit)
     return await mkt.fetch_klines(symbol, interval, limit)
 
 
 @api.get("/markets/{symbol}/depth")
 async def market_depth(symbol: str):
+    if symbol.upper() == "BERX":
+        return await berx.get_depth(db)
     return await mkt.fetch_order_book(symbol)
 
 
 @api.get("/markets/{symbol}/trades")
 async def market_trades(symbol: str):
+    if symbol.upper() == "BERX":
+        return await berx.get_recent_trades(db)
     return await mkt.fetch_recent_trades(symbol)
 
 
@@ -737,7 +774,7 @@ TRADING_FEE = 0.001  # 0.1%
 @api.post("/trade/order")
 async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
     symbol = data.symbol.upper()
-    if symbol not in mkt.COIN_META:
+    if symbol != "BERX" and symbol not in mkt.COIN_META:
         raise HTTPException(status_code=400, detail="Desteklenmeyen coin")
     if data.side not in {"buy", "sell"}:
         raise HTTPException(status_code=400, detail="Yön hatalı")
@@ -1087,6 +1124,75 @@ async def admin_analytics(admin: dict = Depends(require_admin)):
     }
 
 
+# -------------- BERX (admin-controlled) --------------
+@api.get("/admin/berx")
+async def admin_berx(admin: dict = Depends(require_admin)):
+    return await berx.get_ticker(db)
+
+
+@api.post("/admin/berx/price")
+async def admin_berx_price(data: BerxAdjustIn, admin: dict = Depends(require_admin)):
+    if data.action == "set":
+        new_price = await berx.set_price(db, data.value)
+    elif data.action == "adjust":
+        new_price = await berx.adjust_price(db, data.value)
+    else:
+        raise HTTPException(status_code=400, detail="Geçersiz işlem")
+    return {"ok": True, "price_try": new_price}
+
+
+# -------------- Support --------------
+@api.post("/support/message")
+async def support_send(data: SupportMessageIn, user: dict = Depends(get_current_user)):
+    msg_id = new_id("msg_")
+    doc = {
+        "message_id": msg_id,
+        "user_id": user["user_id"],
+        "user_email": user["email"],
+        "user_name": user.get("name", ""),
+        "subject": data.subject,
+        "body": data.body,
+        "category": data.category or "general",
+        "status": "open",
+        "replies": [],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.support_messages.insert_one(doc)
+    return {"ok": True, "message_id": msg_id}
+
+
+@api.get("/support/messages")
+async def support_my(user: dict = Depends(get_current_user)):
+    rows = await db.support_messages.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return rows
+
+
+@api.get("/admin/support")
+async def admin_support_list(status: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {"status": status} if status else {}
+    return await db.support_messages.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api.post("/admin/support/{message_id}/reply")
+async def admin_support_reply(message_id: str, data: SupportReplyIn, admin: dict = Depends(require_admin)):
+    msg = await db.support_messages.find_one({"message_id": message_id})
+    if not msg:
+        raise HTTPException(status_code=404, detail="Mesaj bulunamadı")
+    reply = {
+        "from": "admin",
+        "by": admin.get("email", "admin"),
+        "body": data.body,
+        "at": now_iso(),
+    }
+    update = {"$push": {"replies": reply}, "$set": {"updated_at": now_iso(), "status": "closed" if data.close else "answered"}}
+    await db.support_messages.update_one({"message_id": message_id}, update)
+    await push_notification(
+        msg["user_id"], "Destek Cevaplandı", data.body[:120], "support"
+    )
+    return {"ok": True}
+
+
 # -------------- Public --------------
 @api.get("/settings")
 async def public_settings():
@@ -1123,7 +1229,10 @@ async def on_startup():
     await db.sessions.create_index("session_token", unique=True)
     await db.orders.create_index([("user_id", 1), ("created_at", -1)])
     await db.transactions.create_index([("user_id", 1), ("created_at", -1)])
+    await db.berx_ticks.create_index([("ts", 1)])
+    await db.support_messages.create_index([("user_id", 1), ("created_at", -1)])
     init_storage()
+    await berx.seed_berx(db)
 
     # seed admin
     admin_email = os.environ.get("ADMIN_EMAIL")

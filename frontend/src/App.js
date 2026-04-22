@@ -21,6 +21,7 @@ import KYC from "./pages/KYC";
 import Profile from "./pages/Profile";
 import Watchlist from "./pages/Watchlist";
 import Admin from "./pages/Admin";
+import Support from "./pages/Support";
 
 const Gated = ({ children }) => (
   <ProtectedRoute>
@@ -54,6 +55,7 @@ function AppRouter() {
       <Route path="/kyc" element={<Gated><KYC /></Gated>} />
       <Route path="/profile" element={<Gated><Profile /></Gated>} />
       <Route path="/watchlist" element={<Gated><Watchlist /></Gated>} />
+      <Route path="/support" element={<Gated><Support /></Gated>} />
       <Route path="/admin" element={<ProtectedRoute adminOnly><Layout><Admin /></Layout></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
