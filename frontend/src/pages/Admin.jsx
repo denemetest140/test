@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, formatTRY, errToStr } from "../lib/api";
 import { toast } from "sonner";
 
-const TABS = [["overview","Özet"],["users","Kullanıcılar"],["kyc","KYC"],["deposits","Yatırmalar"],["withdrawals","Çekmeler"],["berx","BERX Coin"],["support","Destek"],["settings","Ayarlar"]];
+const TABS = [["overview","Özet"],["users","Kullanıcılar"],["kyc","KYC"],["deposits","Yatırmalar"],["withdrawals","Çekmeler"],["cwithdrawals","Kripto Çekimleri"],["transfers","Transferler"],["networks","Ağlar"],["berx","BERX Coin"],["support","Destek"],["settings","Ayarlar"]];
 
 export default function Admin() {
   const [tab, setTab] = useState("overview");
@@ -152,6 +152,12 @@ export default function Admin() {
           </table>
         </div>
       )}
+      {tab === "cwithdrawals" && <CryptoWithdrawalsPanel />}
+
+      {tab === "transfers" && <TransfersPanel />}
+
+      {tab === "networks" && <NetworksPanel />}
+
       {tab === "berx" && <BerxPanel />}
 
       {tab === "support" && <SupportPanel />}
@@ -198,6 +204,10 @@ function SettingsPanel({ settings, onSave }) {
         <div>
           <label className="text-xs text-[#94A3B8]">Min. Çekme (TL)</label>
           <input data-testid="settings-min-wd" type="number" className="input-field mt-1 tabular" value={local.min_withdrawal_try ?? 0} onChange={(e) => upd("min_withdrawal_try", Number(e.target.value))} />
+        </div>
+        <div>
+          <label className="text-xs text-[#94A3B8]">İç Transfer Komisyonu (oran, 0.0005 = %0.05)</label>
+          <input data-testid="settings-transfer-fee" type="number" step="0.0001" className="input-field mt-1 tabular" value={local.transfer_fee_pct ?? 0} onChange={(e) => upd("transfer_fee_pct", Number(e.target.value))} />
         </div>
       </div>
       <button data-testid="settings-save" onClick={() => onSave(local)} className="btn-primary px-5 py-2.5 rounded-lg text-sm">Kaydet</button>
@@ -339,3 +349,123 @@ function SupportPanel() {
     </div>
   );
 }
+
+function NetworksPanel() {
+  const [nets, setNets] = useState([]);
+  const load = () => api.get("/admin/networks").then((r) => setNets(r.data || []));
+  useEffect(load, []);
+  const save = async (code, upd) => { try { await api.patch(`/admin/networks/${code}`, upd); toast.success("Ağ güncellendi"); load(); } catch (e) { toast.error(errToStr(e)); } };
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-[#94A3B8]">Her ağ için ücret, min çekim, onay süresi ve aktif/pasif durumu ayarlayın.</div>
+      {nets.map((n) => <NetworkRow key={n.code} n={n} onSave={save} />)}
+    </div>
+  );
+}
+
+function NetworkRow({ n, onSave }) {
+  const [local, setLocal] = useState(n);
+  useEffect(() => setLocal(n), [n]);
+  return (
+    <div className="card-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div>
+          <div className="font-display text-lg">{local.name} <span className="text-xs text-[#94A3B8]">({local.code})</span></div>
+          <div className="text-xs text-[#94A3B8]">{local.description}</div>
+        </div>
+        <button onClick={() => onSave(local.code, { enabled: !local.enabled })} className={`px-3 py-1 rounded text-xs ${local.enabled?"bg-[#10B981]/20 text-[#10B981]":"bg-[#EF4444]/20 text-[#EF4444]"}`} data-testid={`net-toggle-${local.code}`}>
+          {local.enabled ? "Aktif" : "Pasif"}
+        </button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div>
+          <label className="text-[10px] text-[#94A3B8] uppercase">Ücret (TRY)</label>
+          <input data-testid={`net-fee-${local.code}`} type="number" step="0.01" className="input-field mt-1 tabular" value={local.fee_flat_try} onChange={(e) => setLocal({...local, fee_flat_try: Number(e.target.value)})}/>
+        </div>
+        <div>
+          <label className="text-[10px] text-[#94A3B8] uppercase">Min Çekim (TRY)</label>
+          <input data-testid={`net-min-${local.code}`} type="number" step="0.01" className="input-field mt-1 tabular" value={local.min_withdraw_try} onChange={(e) => setLocal({...local, min_withdraw_try: Number(e.target.value)})}/>
+        </div>
+        <div>
+          <label className="text-[10px] text-[#94A3B8] uppercase">Onay (dk)</label>
+          <input data-testid={`net-conf-${local.code}`} type="number" className="input-field mt-1 tabular" value={local.confirm_minutes} onChange={(e) => setLocal({...local, confirm_minutes: Number(e.target.value)})}/>
+        </div>
+        <div className="flex items-end">
+          <button onClick={() => onSave(local.code, {
+            fee_flat_try: local.fee_flat_try, min_withdraw_try: local.min_withdraw_try, confirm_minutes: local.confirm_minutes
+          })} className="btn-primary w-full py-2 rounded-lg text-sm" data-testid={`net-save-${local.code}`}>Kaydet</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransfersPanel() {
+  const [rows, setRows] = useState([]);
+  useEffect(() => { api.get("/admin/transfers").then((r) => setRows(r.data || [])); }, []);
+  return (
+    <div className="card-surface overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead><tr className="text-xs text-[#94A3B8] text-left"><th className="px-4 py-2">Tarih</th><th>Gönderen</th><th>Alıcı</th><th>Coin</th><th className="text-right">Miktar</th><th className="text-right">Komisyon</th><th>Durum</th></tr></thead>
+        <tbody className="divide-y divide-[#1F2633]">
+          {rows.map((t) => (
+            <tr key={t.transfer_id} className="tabular">
+              <td className="px-4 py-2 text-xs">{new Date(t.created_at).toLocaleString("tr-TR")}</td>
+              <td className="text-xs">{t.sender_email}</td>
+              <td className="text-xs">{t.receiver_email}</td>
+              <td>{t.symbol}</td>
+              <td className="text-right">{t.amount.toFixed(6)}</td>
+              <td className="text-right text-[#94A3B8]">{t.fee.toFixed(6)}</td>
+              <td><span className="text-[10px] px-2 py-0.5 rounded-full text-[#10B981] bg-[#10B981]/10">{t.status}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length === 0 && <div className="p-8 text-center text-sm text-[#94A3B8]">Henüz transfer yok</div>}
+    </div>
+  );
+}
+
+function CryptoWithdrawalsPanel() {
+  const [rows, setRows] = useState([]);
+  const [users, setUsers] = useState([]);
+  const load = () => {
+    api.get("/admin/crypto-withdrawals").then((r) => setRows(r.data || []));
+    api.get("/admin/users").then((r) => setUsers(r.data || []));
+  };
+  useEffect(load, []);
+  const act = async (id, status) => { try { await api.patch(`/admin/crypto-withdrawals/${id}`, { status, note: "" }); toast.success("İşlendi"); load(); } catch (e) { toast.error(errToStr(e)); } };
+  return (
+    <div className="card-surface overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead><tr className="text-xs text-[#94A3B8] text-left"><th className="px-4 py-2">Tarih</th><th>Kullanıcı</th><th>Coin</th><th>Ağ</th><th>Adres</th><th className="text-right">Miktar</th><th>Durum</th><th></th></tr></thead>
+        <tbody className="divide-y divide-[#1F2633]">
+          {rows.map((w) => {
+            const u = users.find((x) => x.user_id === w.user_id);
+            return (
+              <tr key={w.withdrawal_id} className="tabular">
+                <td className="px-4 py-2 text-xs">{new Date(w.created_at).toLocaleString("tr-TR")}</td>
+                <td className="text-xs">{u?.email || w.user_id}</td>
+                <td>{w.symbol}</td>
+                <td className="text-xs"><span className="chip text-[10px]">{w.network}</span></td>
+                <td className="text-xs truncate max-w-[200px]">{w.address}</td>
+                <td className="text-right">{w.amount.toFixed(8)}</td>
+                <td className="text-xs">{w.status}</td>
+                <td className="text-right pr-4">
+                  {w.status==="pending" && (
+                    <div className="flex gap-1 justify-end">
+                      <button onClick={() => act(w.withdrawal_id, "approved")} className="px-2 py-1 rounded bg-[#10B981] text-white text-xs" data-testid={`cw-ok-${w.withdrawal_id}`}>Onayla</button>
+                      <button onClick={() => act(w.withdrawal_id, "rejected")} className="px-2 py-1 rounded bg-[#EF4444] text-white text-xs" data-testid={`cw-no-${w.withdrawal_id}`}>Reddet</button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {rows.length === 0 && <div className="p-8 text-center text-sm text-[#94A3B8]">Kripto çekim yok</div>}
+    </div>
+  );
+}
+

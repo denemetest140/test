@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Star,
   Headset,
+  PaperPlaneTilt,
 } from "@phosphor-icons/react";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -19,6 +20,7 @@ const navItems = [
   { to: "/markets", label: "Piyasalar", icon: Storefront, testid: "nav-markets" },
   { to: "/trade/BTC", label: "Al-Sat", icon: ChartLineUp, testid: "nav-trade" },
   { to: "/wallet", label: "Cüzdan", icon: Wallet, testid: "nav-wallet" },
+  { to: "/transfer", label: "Gönder/Al", icon: PaperPlaneTilt, testid: "nav-transfer" },
   { to: "/deposit", label: "TL Yatır", icon: ArrowsDownUp, testid: "nav-deposit" },
   { to: "/withdraw", label: "TL Çek", icon: ArrowsDownUp, testid: "nav-withdraw" },
   { to: "/history", label: "Geçmiş", icon: Clock, testid: "nav-history" },

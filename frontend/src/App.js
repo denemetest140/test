@@ -22,6 +22,7 @@ import Profile from "./pages/Profile";
 import Watchlist from "./pages/Watchlist";
 import Admin from "./pages/Admin";
 import Support from "./pages/Support";
+import Transfer from "./pages/Transfer";
 
 const Gated = ({ children }) => (
   <ProtectedRoute>
@@ -56,6 +57,7 @@ function AppRouter() {
       <Route path="/profile" element={<Gated><Profile /></Gated>} />
       <Route path="/watchlist" element={<Gated><Watchlist /></Gated>} />
       <Route path="/support" element={<Gated><Support /></Gated>} />
+      <Route path="/transfer" element={<Gated><Transfer /></Gated>} />
       <Route path="/admin" element={<ProtectedRoute adminOnly><Layout><Admin /></Layout></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />

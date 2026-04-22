@@ -2,21 +2,23 @@ import { useEffect, useState } from "react";
 import { api, formatTRY, formatNumber, formatPct } from "../lib/api";
 import { Link } from "react-router-dom";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { ArrowDown, ArrowUp, ShoppingCart, HandCoins } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, PaperPlaneTilt } from "@phosphor-icons/react";
+import AssetDetailModal from "../components/AssetDetailModal";
 
 const COLORS = ["#DCA335", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#06B6D4", "#F97316"];
 
 export default function Wallet() {
   const [w, setW] = useState(null);
   const [markets, setMarkets] = useState([]);
+  const [selected, setSelected] = useState(null);
 
+  const reload = () => {
+    api.get("/wallet").then((r) => setW(r.data)).catch(() => {});
+    api.get("/markets").then((r) => setMarkets(r.data || [])).catch(() => {});
+  };
   useEffect(() => {
-    const load = () => {
-      api.get("/wallet").then((r) => setW(r.data)).catch(() => {});
-      api.get("/markets").then((r) => setMarkets(r.data || [])).catch(() => {});
-    };
-    load();
-    const t = setInterval(load, 15000);
+    reload();
+    const t = setInterval(reload, 15000);
     return () => clearInterval(t);
   }, []);
 
@@ -34,6 +36,7 @@ export default function Wallet() {
         <div className="flex gap-2 flex-wrap">
           <Link to="/deposit" className="btn-primary px-4 py-2 rounded-lg text-sm" data-testid="wallet-deposit">TL Yatır</Link>
           <Link to="/withdraw" className="px-4 py-2 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm" data-testid="wallet-withdraw">TL Çek</Link>
+          <Link to="/transfer" className="px-4 py-2 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm flex items-center gap-1" data-testid="wallet-transfer"><PaperPlaneTilt size={14}/> Transfer</Link>
           <Link to="/trade/BTC" className="px-4 py-2 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm" data-testid="wallet-trade">Al-Sat</Link>
         </div>
       </div>
@@ -148,6 +151,8 @@ export default function Wallet() {
           )}
         </div>
       </div>
+
+      {selected && <AssetDetailModal asset={selected} onClose={() => setSelected(null)} onChanged={reload}/>}
     </div>
   );
 }

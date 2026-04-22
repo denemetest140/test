@@ -40,6 +40,7 @@ from storage import init_storage, put_object, get_object
 from email_service import send_email, render_verification, render_status
 import market_data as mkt
 import berx
+import networks as nw
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -276,11 +277,39 @@ class SupportReplyIn(BaseModel):
     close: Optional[bool] = False
 
 
+class TransferIn(BaseModel):
+    recipient: str
+    symbol: str
+    amount: float
+    note: Optional[str] = None
+
+
+class CryptoWithdrawIn(BaseModel):
+    symbol: str
+    network: str
+    address: str
+    amount: float
+
+
+class NetworkUpdateIn(BaseModel):
+    fee_flat_try: Optional[float] = None
+    min_withdraw_try: Optional[float] = None
+    confirm_minutes: Optional[int] = None
+    description: Optional[str] = None
+    enabled: Optional[bool] = None
+    name: Optional[str] = None
+
+
+class CoinNetworksIn(BaseModel):
+    networks: list[str]
+
+
 DEFAULT_SETTINGS = {
     "kyc_enforced": True,
     "trading_fee": 0.001,
     "min_deposit_try": 50.0,
     "min_withdrawal_try": 100.0,
+    "transfer_fee_pct": 0.0005,
 }
 
 
@@ -1124,6 +1153,243 @@ async def admin_analytics(admin: dict = Depends(require_admin)):
     }
 
 
+# -------------- Networks & Multi-chain Wallets --------------
+ALL_COIN_SYMBOLS = [c["symbol"] for c in mkt.SUPPORTED_COINS] + ["BERX"]
+
+
+@api.get("/networks")
+async def public_networks():
+    rows = await nw.list_networks(db)
+    return [n for n in rows if n.get("enabled", True)]
+
+
+@api.get("/coins/{symbol}/networks")
+async def coin_network_list(symbol: str):
+    return await nw.coin_networks(db, symbol, ALL_COIN_SYMBOLS)
+
+
+@api.get("/wallet/deposit-address")
+async def deposit_address(symbol: str, network: str, user: dict = Depends(get_current_user)):
+    nets = await nw.coin_networks(db, symbol, ALL_COIN_SYMBOLS)
+    if not any(n["code"] == network.upper() for n in nets):
+        raise HTTPException(status_code=400, detail="Bu coin için bu ağ desteklenmiyor")
+    try:
+        doc = await nw.get_or_create_address(db, user["user_id"], symbol.upper(), network.upper())
+        return doc
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api.post("/crypto-withdrawals")
+async def crypto_withdraw(data: CryptoWithdrawIn, user: dict = Depends(get_current_user)):
+    sym = data.symbol.upper()
+    net_code = data.network.upper()
+    if sym == "TRY":
+        raise HTTPException(status_code=400, detail="TRY için /withdrawals kullanın")
+    settings = await get_settings()
+    if settings.get("kyc_enforced") and user.get("kyc_status") != "approved":
+        raise HTTPException(status_code=403, detail="Çekim için KYC onayı gerekli")
+    nets = await nw.coin_networks(db, sym, ALL_COIN_SYMBOLS)
+    net = next((n for n in nets if n["code"] == net_code), None)
+    if not net:
+        raise HTTPException(status_code=400, detail="Bu ağ bu coin için aktif değil")
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Geçersiz tutar")
+    # compute coin-equivalent of fee (fee is in TRY, convert using current price)
+    if sym == "BERX":
+        price = await berx.get_berx_price(db)
+    else:
+        t = await mkt.fetch_ticker(sym)
+        price = t["price_try"] if t else 0
+    if price <= 0:
+        raise HTTPException(status_code=400, detail="Fiyat alınamadı")
+    fee_coin = net["fee_flat_try"] / price
+    min_coin = net["min_withdraw_try"] / price
+    if data.amount < min_coin:
+        raise HTTPException(status_code=400, detail=f"Min çekim: {min_coin:.8f} {sym}")
+    total_need = data.amount + fee_coin
+    w = await db.wallets.find_one({"user_id": user["user_id"]})
+    if not w or (w["balances"].get(sym, 0) < total_need):
+        raise HTTPException(status_code=400, detail=f"Yetersiz {sym} bakiyesi (ücret dahil)")
+    await db.wallets.update_one(
+        {"user_id": user["user_id"]},
+        {"$inc": {f"balances.{sym}": -total_need, f"locked.{sym}": data.amount}},
+    )
+    wd_id = new_id("cwd_")
+    await db.crypto_withdrawals.insert_one(
+        {
+            "withdrawal_id": wd_id,
+            "user_id": user["user_id"],
+            "symbol": sym,
+            "network": net_code,
+            "address": data.address,
+            "amount": data.amount,
+            "fee_coin": fee_coin,
+            "fee_try": net["fee_flat_try"],
+            "status": "pending",
+            "created_at": now_iso(),
+        }
+    )
+    return {"ok": True, "withdrawal_id": wd_id, "fee_coin": fee_coin}
+
+
+@api.get("/crypto-withdrawals")
+async def my_crypto_withdrawals(user: dict = Depends(get_current_user)):
+    return await db.crypto_withdrawals.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api.post("/transfers")
+async def create_transfer(data: TransferIn, user: dict = Depends(get_current_user)):
+    sym = data.symbol.upper()
+    if sym == "TRY":
+        raise HTTPException(status_code=400, detail="Bu fonksiyon sadece kripto transferi içindir")
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Geçersiz tutar")
+    q = data.recipient.strip().lower()
+    recipient = None
+    # lookup by email, user_id, or referral_code
+    recipient = await db.users.find_one(
+        {"$or": [
+            {"email": q},
+            {"user_id": data.recipient.strip()},
+            {"referral_code": data.recipient.strip().upper()},
+            {"name": {"$regex": f"^{data.recipient.strip()}$", "$options": "i"}},
+        ]},
+        {"_id": 0, "password_hash": 0},
+    )
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Alıcı bulunamadı")
+    if recipient["user_id"] == user["user_id"]:
+        raise HTTPException(status_code=400, detail="Kendinize transfer yapamazsınız")
+    settings = await get_settings()
+    fee_pct = settings.get("transfer_fee_pct", 0.0005)
+    fee = data.amount * fee_pct
+    total_need = data.amount + fee
+    w = await db.wallets.find_one({"user_id": user["user_id"]})
+    if not w or w["balances"].get(sym, 0) < total_need:
+        raise HTTPException(status_code=400, detail=f"Yetersiz {sym} bakiyesi")
+    await ensure_wallet(recipient["user_id"])
+    await db.wallets.update_one(
+        {"user_id": user["user_id"]}, {"$inc": {f"balances.{sym}": -total_need}}
+    )
+    await db.wallets.update_one(
+        {"user_id": recipient["user_id"]}, {"$inc": {f"balances.{sym}": data.amount}}
+    )
+    tid = new_id("tr_")
+    doc = {
+        "transfer_id": tid,
+        "sender_id": user["user_id"],
+        "sender_email": user["email"],
+        "receiver_id": recipient["user_id"],
+        "receiver_email": recipient["email"],
+        "symbol": sym,
+        "amount": data.amount,
+        "fee": fee,
+        "note": data.note or "",
+        "status": "completed",
+        "created_at": now_iso(),
+    }
+    await db.internal_transfers.insert_one(doc)
+    await push_notification(
+        recipient["user_id"],
+        "Transfer Alındı",
+        f"{user['email']} kullanıcısından {data.amount} {sym} aldınız.",
+        "transfer",
+    )
+    return {"ok": True, "transfer": {k: v for k, v in doc.items() if k != "_id"}, "receiver_name": recipient.get("name")}
+
+
+@api.get("/transfers")
+async def my_transfers(user: dict = Depends(get_current_user)):
+    sent = await db.internal_transfers.find({"sender_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    received = await db.internal_transfers.find({"receiver_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    return {"sent": sent, "received": received}
+
+
+@api.get("/users/lookup")
+async def user_lookup(q: str, user: dict = Depends(get_current_user)):
+    query = q.strip()
+    if len(query) < 3:
+        return None
+    recipient = await db.users.find_one(
+        {"$or": [
+            {"email": query.lower()},
+            {"user_id": query},
+            {"referral_code": query.upper()},
+            {"name": {"$regex": f"^{query}$", "$options": "i"}},
+        ]},
+        {"_id": 0, "email": 1, "name": 1, "user_id": 1, "referral_code": 1},
+    )
+    if not recipient or recipient["user_id"] == user["user_id"]:
+        return None
+    return recipient
+
+
+# -------------- Admin Networks & Transfers --------------
+@api.get("/admin/networks")
+async def admin_networks(admin: dict = Depends(require_admin)):
+    return await nw.list_networks(db)
+
+
+@api.patch("/admin/networks/{code}")
+async def admin_network_update(code: str, data: NetworkUpdateIn, admin: dict = Depends(require_admin)):
+    upd = {k: v for k, v in data.model_dump(exclude_none=True).items()}
+    result = await nw.update_network(db, code, upd)
+    return result
+
+
+@api.get("/admin/coins/{symbol}/networks")
+async def admin_coin_networks(symbol: str, admin: dict = Depends(require_admin)):
+    override = await db.coin_networks.find_one({"symbol": symbol.upper()}, {"_id": 0})
+    default = nw.DEFAULT_COIN_NETWORKS.get(symbol.upper()) or nw.DEFAULT_FALLBACK
+    return {"symbol": symbol.upper(), "enabled": (override or {}).get("networks") or default, "default": default}
+
+
+@api.put("/admin/coins/{symbol}/networks")
+async def admin_set_coin_networks(symbol: str, data: CoinNetworksIn, admin: dict = Depends(require_admin)):
+    await nw.set_coin_networks(db, symbol, data.networks)
+    return {"ok": True}
+
+
+@api.get("/admin/transfers")
+async def admin_transfers(admin: dict = Depends(require_admin)):
+    return await db.internal_transfers.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+
+
+@api.get("/admin/crypto-withdrawals")
+async def admin_crypto_withdrawals(status: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {"status": status} if status else {}
+    return await db.crypto_withdrawals.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api.patch("/admin/crypto-withdrawals/{withdrawal_id}")
+async def admin_crypto_withdrawal_update(withdrawal_id: str, payload: AdminStatusIn, admin: dict = Depends(require_admin)):
+    wd = await db.crypto_withdrawals.find_one({"withdrawal_id": withdrawal_id})
+    if not wd:
+        raise HTTPException(status_code=404, detail="Bulunamadı")
+    if wd["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Zaten işlenmiş")
+    sym = wd["symbol"]
+    if payload.status == "approved":
+        await db.wallets.update_one(
+            {"user_id": wd["user_id"]}, {"$inc": {f"locked.{sym}": -wd["amount"]}}
+        )
+    else:
+        await db.wallets.update_one(
+            {"user_id": wd["user_id"]},
+            {"$inc": {f"balances.{sym}": wd["amount"] + wd["fee_coin"], f"locked.{sym}": -wd["amount"]}},
+        )
+    await db.crypto_withdrawals.update_one(
+        {"withdrawal_id": withdrawal_id},
+        {"$set": {"status": payload.status, "review_note": payload.note, "reviewed_at": now_iso()}},
+    )
+    user = await db.users.find_one({"user_id": wd["user_id"]})
+    if user:
+        title = f"{sym} Çekme {'Onaylandı' if payload.status=='approved' else 'Reddedildi'}"
+        await push_notification(user["user_id"], title, payload.note or "", "withdrawal")
+    return {"ok": True}
+
+
 # -------------- BERX (admin-controlled) --------------
 @api.get("/admin/berx")
 async def admin_berx(admin: dict = Depends(require_admin)):
@@ -1231,8 +1497,12 @@ async def on_startup():
     await db.transactions.create_index([("user_id", 1), ("created_at", -1)])
     await db.berx_ticks.create_index([("ts", 1)])
     await db.support_messages.create_index([("user_id", 1), ("created_at", -1)])
+    await db.internal_transfers.create_index([("sender_id", 1), ("created_at", -1)])
+    await db.internal_transfers.create_index([("receiver_id", 1), ("created_at", -1)])
+    await db.deposit_addresses.create_index([("user_id", 1), ("symbol", 1), ("network", 1)], unique=True)
     init_storage()
     await berx.seed_berx(db)
+    await nw.seed_networks(db)
 
     # seed admin
     admin_email = os.environ.get("ADMIN_EMAIL")
