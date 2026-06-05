@@ -235,6 +235,60 @@ function CoinRail({ title, icon: Icon, tint, coins, sparks, onMount }) {
   );
 }
 
+// --- BERX Spotlight Card -----------------------------------------------------
+function BerxSpotlightCard({ sparks }) {
+  const [berx, setBerx] = useState(null);
+  useEffect(() => {
+    const load = () => api.get("/markets/BERX").then((r) => setBerx(r.data)).catch(() => {});
+    load();
+    const t = setInterval(load, 8000);
+    return () => clearInterval(t);
+  }, []);
+  if (!berx) return <div className="card-surface p-6 h-[360px] animate-pulse"/>;
+  const up = berx.change_24h >= 0;
+  const spark = sparks["BERX"] || [];
+  const data = spark.map((c, i) => ({ i, c }));
+  return (
+    <div className="relative">
+      <div className="absolute -inset-6 bg-radial-gold blur-2xl opacity-80"/>
+      <div className="relative card-surface p-7 backdrop-blur-xl border-[#DCA335]/30">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-[#DCA335]/20 text-[#DCA335] flex items-center justify-center font-display text-xl font-bold animate-pulse-gold">B</div>
+            <div>
+              <div className="font-display text-xl">BERX</div>
+              <div className="text-xs text-[#94A3B8]">Berx Token · Coinberx İç Ağı</div>
+            </div>
+          </div>
+          <div className={`chip ${up?"text-[#10B981]":"text-[#EF4444]"}`}>
+            {up?<TrendUp size={12} weight="fill"/>:<TrendDown size={12} weight="fill"/>}
+            {formatPct(berx.change_24h)}
+          </div>
+        </div>
+        <div className="font-display text-4xl tabular mt-5 text-[#DCA335]">{formatTRY(berx.price_try, 6)}</div>
+        <div className="text-xs text-[#94A3B8] tabular mt-1">24s Hacim {formatTRY(berx.volume_24h_try, 0)}</div>
+        <div className="h-24 mt-4 -mx-2">
+          <ResponsiveContainer>
+            <AreaChart data={data}>
+              <defs>
+                <linearGradient id="berxFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#DCA335" stopOpacity={0.5}/>
+                  <stop offset="100%" stopColor="#DCA335" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <Area dataKey="c" stroke="#DCA335" strokeWidth={2} fill="url(#berxFill)" isAnimationActive={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mt-5">
+          <Link to="/trade/BERX" className="py-2.5 rounded-lg bg-[#DCA335] hover:bg-[#F5B841] text-black text-sm font-semibold text-center" data-testid="berx-spot-buy">Al-Sat</Link>
+          <Link to="/transfer" className="py-2.5 rounded-lg border border-[#DCA335]/50 hover:bg-[#DCA335]/10 text-sm text-center">Gönder</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Landing -----------------------------------------------------------
 export default function Landing() {
   const [coins, setCoins] = useState([]);
@@ -263,11 +317,13 @@ export default function Landing() {
     return () => clearInterval(t);
   }, []);
 
-  // Fetch sparklines for a curated set (top 8 by volume)
+  // Fetch sparklines for a curated set (top 8 by volume + BERX)
   useEffect(() => {
     if (coins.length === 0) return;
     const top = [...coins].sort((a,b)=>b.volume_24h_try-a.volume_24h_try).slice(0,8).map(c=>c.symbol);
-    top.forEach(async (sym) => {
+    const forceBerx = coins.find((c) => c.symbol === "BERX") ? ["BERX"] : [];
+    const symbols = Array.from(new Set([...top, ...forceBerx]));
+    symbols.forEach(async (sym) => {
       if (sparks[sym]) return;
       try {
         const { data } = await api.get(`/markets/${sym}/sparkline?points=24`);
@@ -438,20 +494,43 @@ export default function Landing() {
           )}
         </div>
 
-        {/* Heatmap */}
-        <div className="mt-12">
-          <div className="flex items-end justify-between mb-4">
-            <div>
-              <div className="chip mb-3"><Sparkle size={12} weight="fill" className="text-[#DCA335]"/>Piyasa Isı Haritası</div>
-              <h3 className="font-display text-2xl">Piyasa genel durumu</h3>
+        {/* BERX Spotlight + VIP tiers - replaces heatmap to keep landing clean */}
+      </section>
+
+      {/* BERX Spotlight */}
+      <section className="relative overflow-hidden border-y border-[#1F2633] bg-gradient-to-br from-[#0B0E14] via-[#070A0F] to-[#0B0E14]">
+        <div className="absolute -top-32 -right-20 w-[420px] h-[420px] rounded-full bg-[#DCA335]/15 blur-3xl"/>
+        <div className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-[#DCA335]/10 blur-3xl"/>
+        <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <div className="chip mb-3"><Sparkle size={12} weight="fill" className="text-[#DCA335]"/>Coinberx Yerel Coini</div>
+            <h2 className="font-display text-4xl sm:text-5xl tracking-tight">
+              <span className="text-[#DCA335]">BERX</span> ile daha az komisyon ödeyin
+            </h2>
+            <p className="text-[#94A3B8] mt-5 text-base sm:text-lg">
+              BERX, Coinberx'in yerel coinidir. BERX bakiyenize göre tüm spot işlemlerde %10'dan %25'e kadar komisyon indirimi kazanırsınız.
+            </p>
+            <div className="grid sm:grid-cols-3 gap-3 mt-7">
+              {[
+                ["%10","Silver", "250+ BERX"],
+                ["%20","Gold", "1.000+ BERX"],
+                ["%25","VIP",  "5.000+ BERX"],
+              ].map(([d, lvl, req]) => (
+                <div key={lvl} className="card-surface p-4 text-center hover:border-[#DCA335]/60 transition">
+                  <div className="font-display text-2xl text-[#DCA335]">{d}</div>
+                  <div className="text-xs text-[#F8FAFC] mt-1">İndirim</div>
+                  <div className="text-[10px] text-[#94A3B8] uppercase mt-2">{lvl}</div>
+                  <div className="text-[10px] text-[#94A3B8] tabular">{req}</div>
+                </div>
+              ))}
             </div>
-            <div className="text-xs text-[#94A3B8] hidden sm:flex items-center gap-3">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm" style={{background:"rgba(16,185,129,0.55)"}}/>Yükseliş</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm" style={{background:"rgba(239,68,68,0.55)"}}/>Düşüş</span>
+            <div className="flex gap-3 mt-7">
+              <Link to="/trade/BERX" className="btn-primary px-5 py-3 rounded-lg text-sm flex items-center gap-2" data-testid="berx-trade-cta">BERX Al-Sat <ArrowUpRight size={14} weight="bold"/></Link>
+              <Link to="/faq" className="px-5 py-3 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm">Nasıl çalışır?</Link>
             </div>
           </div>
-          <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 auto-rows-[72px] gap-2">
-            {coins.slice(0, 24).map((c) => <HeatTile key={c.symbol} coin={c}/>)}
+          <div className="relative">
+            <BerxSpotlightCard sparks={sparks}/>
           </div>
         </div>
       </section>
@@ -644,8 +723,8 @@ export default function Landing() {
           </div>
           {[
             {h:"Ürün", links:[["Piyasalar","/markets"],["Al-Sat","/trade/BTC"],["TL Yatır","/deposit"],["Cüzdan","/wallet"]]},
-            {h:"Şirket", links:[["Hakkımızda","#"],["Blog","#"],["Kariyer","#"],["Basın","#"]]},
-            {h:"Destek", links:[["Yardım Merkezi","#"],["SSS","#"],["İletişim","#"],["API Dokümanı","#"]]},
+            {h:"Şirket", links:[["Hakkımızda","/about"],["Blog","/blog"],["Kariyer","/career"],["Basın","/press"]]},
+            {h:"Destek", links:[["Yardım Merkezi","/help"],["SSS","/faq"],["İletişim","/contact"]]},
           ].map((col) => (
             <div key={col.h}>
               <div className="font-display text-sm text-[#F8FAFC] mb-4">{col.h}</div>

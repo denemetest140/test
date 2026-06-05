@@ -11,12 +11,14 @@ export default function Dashboard() {
   const [markets, setMarkets] = useState([]);
   const [klines, setKlines] = useState([]);
   const [txs, setTxs] = useState([]);
+  const [tier, setTier] = useState(null);
 
   useEffect(() => {
     api.get("/wallet").then((r) => setWallet(r.data)).catch(() => {});
     api.get("/markets").then((r) => setMarkets(r.data || [])).catch(() => {});
     api.get("/markets/BTC/klines?interval=1h&limit=72").then((r) => setKlines(r.data || [])).catch(() => {});
     api.get("/wallet/transactions?limit=8").then((r) => setTxs(r.data || [])).catch(() => {});
+    api.get("/user/tier").then((r) => setTier(r.data)).catch(() => {});
   }, []);
 
   const pnlColor = (wallet?.pnl_try ?? 0) >= 0 ? "text-[#10B981]" : "text-[#EF4444]";
@@ -39,6 +41,30 @@ export default function Dashboard() {
           <Link to="/trade/BTC" className="px-5 py-2.5 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm" data-testid="cta-trade">Al-Sat</Link>
         </div>
       </div>
+
+      {tier && (
+        <div className="card-surface p-5 mb-6 flex flex-wrap items-center justify-between gap-4" data-testid="dash-tier">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center font-display text-lg font-bold" style={{ background: `${tier.tier.color}20`, color: tier.tier.color }}>
+              {tier.tier.label[0]}
+            </div>
+            <div>
+              <div className="text-xs text-[#94A3B8] uppercase tracking-wide">VIP Seviyeniz</div>
+              <div className="font-display text-xl" style={{ color: tier.tier.color }}>{tier.tier.label}</div>
+              <div className="text-xs text-[#94A3B8] tabular mt-0.5">
+                30g Hacim: {formatTRY(tier.volume_30d, 0)} · BERX: {tier.berx_holding.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-center">
+              <div className="font-display text-2xl text-[#DCA335]">%{(tier.tier.fee_discount * 100).toFixed(0)}</div>
+              <div className="text-[10px] text-[#94A3B8]">Komisyon İndirimi</div>
+            </div>
+            <Link to="/trade/BERX" className="px-4 py-2 rounded-lg border border-[#DCA335]/40 hover:bg-[#DCA335]/10 text-[#DCA335] text-sm">BERX Topla</Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="card-surface p-5 lg:col-span-2">

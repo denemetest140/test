@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, errToStr } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
-import { GoogleLogo } from "@phosphor-icons/react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -27,12 +26,6 @@ export default function Login() {
     }
   };
 
-  const google = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirect = window.location.origin + "/dashboard";
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirect)}`;
-  };
-
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-[#070A0F] text-[#F8FAFC]">
       <div className="hidden lg:flex relative items-center justify-center bg-[#0B0E14] border-r border-[#1F2633] overflow-hidden">
@@ -50,13 +43,6 @@ export default function Login() {
         <form onSubmit={submit} className="w-full max-w-md card-surface p-8" data-testid="login-form">
           <h1 className="font-display text-2xl mb-2">Giriş Yap</h1>
           <p className="text-[#94A3B8] text-sm mb-6">Hesabınızla devam edin</p>
-
-          <button type="button" onClick={google} data-testid="login-google-btn" className="w-full mb-5 flex items-center justify-center gap-2 py-3 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm">
-            <GoogleLogo size={18} weight="bold" /> Google ile Devam Et
-          </button>
-          <div className="flex items-center gap-3 my-5 text-xs text-[#94A3B8]">
-            <div className="flex-1 h-px bg-[#1F2633]" /> veya <div className="flex-1 h-px bg-[#1F2633]" />
-          </div>
 
           <label className="text-xs text-[#94A3B8]">E-posta</label>
           <input data-testid="login-email" className="input-field mt-1 mb-4" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />

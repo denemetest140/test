@@ -446,55 +446,10 @@ async def resend_code(data: ResendCodeIn):
     return {"ok": True}
 
 
-# Google (Emergent) auth callback
+# Google (Emergent) auth callback — REMOVED: sadece e-posta+şifre desteği kaldı
 @api.post("/auth/google/session")
-async def google_session(response: Response, x_session_id: str = Header(...)):
-    async with httpx.AsyncClient(timeout=20) as c:
-        r = await c.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": x_session_id},
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Google oturumu doğrulanamadı")
-    info = r.json()
-    email = info["email"].lower()
-    user = await db.users.find_one({"email": email})
-    if not user:
-        user_id = new_id("usr_")
-        user = {
-            "user_id": user_id,
-            "email": email,
-            "name": info.get("name", email.split("@")[0]),
-            "avatar_url": info.get("picture"),
-            "role": "user",
-            "email_verified": True,
-            "kyc_status": "none",
-            "two_fa_enabled": False,
-            "auth_provider": "google",
-            "referral_code": "CB" + secrets.token_hex(3).upper(),
-            "created_at": now_iso(),
-        }
-        await db.users.insert_one(user)
-    await ensure_wallet(user["user_id"])
-    session_token = info["session_token"]
-    await db.sessions.insert_one(
-        {
-            "session_token": session_token,
-            "user_id": user["user_id"],
-            "expires_at": (now_dt() + timedelta(days=7)).isoformat(),
-            "created_at": now_iso(),
-        }
-    )
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        max_age=60 * 60 * 24 * 7,
-        path="/",
-    )
-    return {"user": clean_user(user)}
+async def google_session_disabled():
+    raise HTTPException(status_code=410, detail="Google ile giriş kaldırıldı")
 
 
 # -------------- Profile --------------
@@ -797,7 +752,42 @@ async def market_trades(symbol: str):
 
 
 # -------------- Trading --------------
-TRADING_FEE = 0.001  # 0.1%
+TRADING_FEE = 0.001  # 0.1% default
+
+VIP_TIERS = [
+    {"code": "BRONZE", "label": "Bronze", "volume_try_30d": 0,        "berx_min": 0,       "fee_discount": 0.00, "color": "#B08560"},
+    {"code": "SILVER", "label": "Silver", "volume_try_30d": 50_000,   "berx_min": 250,     "fee_discount": 0.10, "color": "#94A3B8"},
+    {"code": "GOLD",   "label": "Gold",   "volume_try_30d": 500_000,  "berx_min": 1_000,   "fee_discount": 0.20, "color": "#DCA335"},
+    {"code": "VIP",    "label": "VIP",    "volume_try_30d": 5_000_000,"berx_min": 5_000,   "fee_discount": 0.25, "color": "#A855F7"},
+]
+
+
+async def compute_user_tier(user_id: str) -> dict:
+    since = (now_dt() - timedelta(days=30)).isoformat()
+    vol_pipeline = [
+        {"$match": {"user_id": user_id, "type": "trade", "created_at": {"$gte": since}}},
+        {"$group": {"_id": None, "v": {"$sum": "$amount_try"}}},
+    ]
+    vol = await db.transactions.aggregate(vol_pipeline).to_list(1)
+    volume = vol[0]["v"] if vol else 0
+    w = await db.wallets.find_one({"user_id": user_id})
+    berx_holding = (w or {}).get("balances", {}).get("BERX", 0) if w else 0
+    # highest tier satisfied by EITHER volume OR BERX holding
+    tier = VIP_TIERS[0]
+    for t in VIP_TIERS:
+        if volume >= t["volume_try_30d"] or berx_holding >= t["berx_min"]:
+            tier = t
+    return {
+        "tier": tier,
+        "volume_30d": volume,
+        "berx_holding": berx_holding,
+        "all_tiers": VIP_TIERS,
+    }
+
+
+@api.get("/user/tier")
+async def user_tier(user: dict = Depends(get_current_user)):
+    return await compute_user_tier(user["user_id"])
 
 
 @api.post("/trade/order")
@@ -855,7 +845,9 @@ async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
 
     if data.order_type == "market":
         # execute immediately against market price
-        fee = amount * TRADING_FEE
+        tier_info = await compute_user_tier(user["user_id"])
+        effective_fee_rate = TRADING_FEE * (1 - tier_info["tier"]["fee_discount"])
+        fee = amount * effective_fee_rate
         if data.side == "buy":
             required = amount + fee
             if wallet["balances"].get("TRY", 0) < required:

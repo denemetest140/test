@@ -9,7 +9,7 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import VerifyEmail from "./pages/VerifyEmail";
-import AuthCallback from "./pages/AuthCallback";
+import AuthCallback from "./pages/AuthCallback"; // kept for legacy stray links
 import Dashboard from "./pages/Dashboard";
 import Markets from "./pages/Markets";
 import Trade from "./pages/Trade";
@@ -23,6 +23,8 @@ import Watchlist from "./pages/Watchlist";
 import Admin from "./pages/Admin";
 import Support from "./pages/Support";
 import Transfer from "./pages/Transfer";
+import LiveActivity from "./components/LiveActivity";
+import { About, Blog, Career, Press, Help, FAQ, Contact } from "./pages/InfoPages";
 
 const Gated = ({ children }) => (
   <ProtectedRoute>
@@ -58,6 +60,13 @@ function AppRouter() {
       <Route path="/watchlist" element={<Gated><Watchlist /></Gated>} />
       <Route path="/support" element={<Gated><Support /></Gated>} />
       <Route path="/transfer" element={<Gated><Transfer /></Gated>} />
+      <Route path="/about" element={<About />} />
+      <Route path="/blog" element={<Blog />} />
+      <Route path="/career" element={<Career />} />
+      <Route path="/press" element={<Press />} />
+      <Route path="/help" element={<Help />} />
+      <Route path="/faq" element={<FAQ />} />
+      <Route path="/contact" element={<Contact />} />
       <Route path="/admin" element={<ProtectedRoute adminOnly><Layout><Admin /></Layout></ProtectedRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -70,6 +79,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <AppRouter />
+        <LiveActivity />
         <Toaster theme="dark" position="top-right" richColors closeButton />
       </BrowserRouter>
     </AuthProvider>
