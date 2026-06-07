@@ -5,7 +5,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { ArrowDown, ArrowUp, PaperPlaneTilt } from "@phosphor-icons/react";
 import AssetDetailModal from "../components/AssetDetailModal";
 
-const COLORS = ["#DCA335", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#06B6D4", "#F97316"];
+const COLORS = ["#16A34A", "#16A34A", "#3B82F6", "#8B5CF6", "#EC4899", "#D97706", "#06B6D4", "#F97316"];
 
 export default function Wallet() {
   const [w, setW] = useState(null);
@@ -31,43 +31,43 @@ export default function Wallet() {
       <div className="flex items-end justify-between flex-wrap gap-4 mb-8">
         <div>
           <h1 className="font-display text-3xl">Cüzdan</h1>
-          <p className="text-[#94A3B8] text-sm mt-1">Tüm varlıklarınız tek ekranda · TL ve 50+ kripto</p>
+          <p className="text-[#64748B] text-sm mt-1">Tüm varlıklarınız tek ekranda · TL ve 50+ kripto</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Link to="/deposit" className="btn-primary px-4 py-2 rounded-lg text-sm" data-testid="wallet-deposit">TL Yatır</Link>
-          <Link to="/withdraw" className="px-4 py-2 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm" data-testid="wallet-withdraw">TL Çek</Link>
-          <Link to="/transfer" className="px-4 py-2 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm flex items-center gap-1" data-testid="wallet-transfer"><PaperPlaneTilt size={14}/> Transfer</Link>
-          <Link to="/trade/BTC" className="px-4 py-2 rounded-lg border border-[#1F2633] hover:bg-[#11151E] text-sm" data-testid="wallet-trade">Al-Sat</Link>
+          <Link to="/withdraw" className="px-4 py-2 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm" data-testid="wallet-withdraw">TL Çek</Link>
+          <Link to="/transfer" className="px-4 py-2 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm flex items-center gap-1" data-testid="wallet-transfer"><PaperPlaneTilt size={14}/> Transfer</Link>
+          <Link to="/trade/BTC" className="px-4 py-2 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm" data-testid="wallet-trade">Al-Sat</Link>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4 mb-8">
         <div className="card-surface p-5">
-          <div className="text-xs text-[#94A3B8]">Toplam Portföy</div>
+          <div className="text-xs text-[#64748B]">Toplam Portföy</div>
           <div className="font-display text-3xl tabular mt-1" data-testid="wallet-total">{formatTRY(w?.total_try ?? 0)}</div>
-          <div className="text-xs text-[#94A3B8] mt-2 tabular">{assets.length} varlık</div>
+          <div className="text-xs text-[#64748B] mt-2 tabular">{assets.length} varlık</div>
         </div>
         <div className="card-surface p-5">
-          <div className="text-xs text-[#94A3B8]">Toplam Yatırılan</div>
+          <div className="text-xs text-[#64748B]">Toplam Yatırılan</div>
           <div className="font-display text-3xl tabular mt-1">{formatTRY(w?.invested_try ?? 0)}</div>
-          <div className="text-xs text-[#94A3B8] mt-2">Kümülatif alış tutarı</div>
+          <div className="text-xs text-[#64748B] mt-2">Kümülatif alış tutarı</div>
         </div>
         <div className="card-surface p-5">
-          <div className="text-xs text-[#94A3B8]">Kâr / Zarar</div>
-          <div className={`font-display text-3xl tabular mt-1 ${(w?.pnl_try??0)>=0?"text-[#10B981]":"text-[#EF4444]"}`} data-testid="wallet-pnl">
+          <div className="text-xs text-[#64748B]">Kâr / Zarar</div>
+          <div className={`font-display text-3xl tabular mt-1 ${(w?.pnl_try??0)>=0?"text-[#16A34A]":"text-[#DC2626]"}`} data-testid="wallet-pnl">
             {(w?.pnl_try??0)>=0?"+":""}{formatTRY(w?.pnl_try ?? 0)}
           </div>
-          <div className="text-xs text-[#94A3B8] mt-2">Piyasa fiyatlarıyla</div>
+          <div className="text-xs text-[#64748B] mt-2">Piyasa fiyatlarıyla</div>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6 mb-8">
         <div className="card-surface p-5 lg:col-span-2">
-          <div className="text-xs text-[#94A3B8] mb-3">Varlıklarım</div>
+          <div className="text-xs text-[#64748B] mb-3">Varlıklarım</div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-[#94A3B8] text-left border-b border-[#1F2633]">
+                <tr className="text-xs text-[#64748B] text-left border-b border-[#E2E8F0]">
                   <th className="pb-3">Varlık</th>
                   <th className="pb-3 text-right">Miktar</th>
                   <th className="pb-3 text-right hidden md:table-cell">Fiyat</th>
@@ -76,7 +76,7 @@ export default function Wallet() {
                   <th className="pb-3 text-right">Hızlı İşlem</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#1F2633]">
+              <tbody className="divide-y divide-[#E2E8F0]">
                 {assets.map((a) => {
                   const ch = change(a.symbol);
                   const up = ch >= 0;
@@ -84,16 +84,16 @@ export default function Wallet() {
                     <tr key={a.symbol} data-testid={`wallet-row-${a.symbol}`}>
                       <td className="py-3">
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${a.symbol==="TRY"?"bg-[#DCA335] text-black":a.symbol==="BERX"?"bg-[#DCA335]/20 text-[#DCA335]":"bg-[#1F2633]"}`}>{a.symbol === "TRY" ? "₺" : a.symbol.slice(0,2)}</div>
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${a.symbol==="TRY"?"bg-[#16A34A] text-black":a.symbol==="BERX"?"bg-[#16A34A]/20 text-[#16A34A]":"bg-[#E2E8F0]"}`}>{a.symbol === "TRY" ? "₺" : a.symbol.slice(0,2)}</div>
                           <div>
                             <div className="font-medium">{a.symbol === "TRY" ? "Türk Lirası" : a.symbol}</div>
-                            <div className="text-xs text-[#94A3B8]">{a.symbol === "TRY" ? "TL" : (a.symbol === "BERX" ? "Berx Token" : (markets.find(m=>m.symbol===a.symbol)?.name || ""))}</div>
+                            <div className="text-xs text-[#64748B]">{a.symbol === "TRY" ? "TL" : (a.symbol === "BERX" ? "Berx Token" : (markets.find(m=>m.symbol===a.symbol)?.name || ""))}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 text-right tabular">{formatNumber(a.amount)}{a.locked>0 && <span className="text-[10px] text-[#F59E0B] ml-2">+{formatNumber(a.locked)} kilitli</span>}</td>
+                      <td className="py-3 text-right tabular">{formatNumber(a.amount)}{a.locked>0 && <span className="text-[10px] text-[#D97706] ml-2">+{formatNumber(a.locked)} kilitli</span>}</td>
                       <td className="py-3 text-right tabular hidden md:table-cell">{a.symbol==="TRY"?"-":formatTRY(a.price_try, a.price_try < 1 ? 6 : 2)}</td>
-                      <td className={`py-3 text-right tabular hidden md:table-cell ${up?"text-[#10B981]":"text-[#EF4444]"}`}>{a.symbol==="TRY"?"-":(
+                      <td className={`py-3 text-right tabular hidden md:table-cell ${up?"text-[#16A34A]":"text-[#DC2626]"}`}>{a.symbol==="TRY"?"-":(
                         <span className="inline-flex items-center gap-1">{up?<ArrowUp size={10} weight="bold"/>:<ArrowDown size={10} weight="bold"/>}{formatPct(ch)}</span>
                       )}</td>
                       <td className="py-3 text-right tabular font-medium">{formatTRY(a.value_try)}</td>
@@ -101,13 +101,13 @@ export default function Wallet() {
                         <div className="flex gap-1 justify-end">
                           {a.symbol === "TRY" ? (
                             <>
-                              <Link to="/deposit" className="px-2.5 py-1 rounded bg-[#10B981] text-white text-[11px] font-medium" data-testid={`wallet-try-deposit`}>Yatır</Link>
-                              <Link to="/withdraw" className="px-2.5 py-1 rounded bg-[#EF4444] text-white text-[11px] font-medium" data-testid={`wallet-try-withdraw`}>Çek</Link>
+                              <Link to="/deposit" className="px-2.5 py-1 rounded bg-[#16A34A] text-white text-[11px] font-medium" data-testid={`wallet-try-deposit`}>Yatır</Link>
+                              <Link to="/withdraw" className="px-2.5 py-1 rounded bg-[#DC2626] text-white text-[11px] font-medium" data-testid={`wallet-try-withdraw`}>Çek</Link>
                             </>
                           ) : (
                             <>
-                              <Link to={`/trade/${a.symbol}`} className="px-2.5 py-1 rounded bg-[#10B981] text-white text-[11px] font-medium" data-testid={`wallet-buy-${a.symbol}`}>Al</Link>
-                              <Link to={`/trade/${a.symbol}`} className="px-2.5 py-1 rounded bg-[#EF4444] text-white text-[11px] font-medium" data-testid={`wallet-sell-${a.symbol}`}>Sat</Link>
+                              <Link to={`/trade/${a.symbol}`} className="px-2.5 py-1 rounded bg-[#16A34A] text-white text-[11px] font-medium" data-testid={`wallet-buy-${a.symbol}`}>Al</Link>
+                              <Link to={`/trade/${a.symbol}`} className="px-2.5 py-1 rounded bg-[#DC2626] text-white text-[11px] font-medium" data-testid={`wallet-sell-${a.symbol}`}>Sat</Link>
                             </>
                           )}
                         </div>
@@ -121,9 +121,9 @@ export default function Wallet() {
         </div>
 
         <div className="card-surface p-5">
-          <div className="text-xs text-[#94A3B8] mb-3">Varlık Dağılımı</div>
+          <div className="text-xs text-[#64748B] mb-3">Varlık Dağılımı</div>
           {pieData.length === 0 ? (
-            <div className="text-sm text-[#94A3B8] py-10 text-center">Henüz varlığınız yok</div>
+            <div className="text-sm text-[#64748B] py-10 text-center">Henüz varlığınız yok</div>
           ) : (
             <>
               <div className="h-[220px]">
@@ -132,7 +132,7 @@ export default function Wallet() {
                     <Pie data={pieData} dataKey="value_try" nameKey="symbol" innerRadius={55} outerRadius={90} stroke="none">
                       {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v) => formatTRY(v)} contentStyle={{ background: "#11151E", border: "1px solid #1F2633" }} />
+                    <Tooltip formatter={(v) => formatTRY(v)} contentStyle={{ background: "#FFFFFF", border: "1px solid #E2E8F0" }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -142,7 +142,7 @@ export default function Wallet() {
                   return (
                     <div key={a.symbol} className="flex items-center justify-between text-xs">
                       <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />{a.symbol}</span>
-                      <span className="tabular text-[#94A3B8]">{pct.toFixed(1)}%</span>
+                      <span className="tabular text-[#64748B]">{pct.toFixed(1)}%</span>
                     </div>
                   );
                 })}

@@ -14,17 +14,17 @@ export default function History() {
       <h1 className="font-display text-3xl mb-6">İşlem Geçmişi</h1>
 
       <div className="card-surface mb-6">
-        <div className="p-4 border-b border-[#1F2633] text-sm font-medium">Emirler</div>
+        <div className="p-4 border-b border-[#E2E8F0] text-sm font-medium">Emirler</div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-xs text-[#94A3B8] text-left"><th className="px-4 py-2">Tarih</th><th>Coin</th><th>Tür</th><th>Yön</th><th className="text-right">Adet</th><th className="text-right">Fiyat</th><th className="text-right">Tutar</th><th>Durum</th></tr></thead>
-            <tbody className="divide-y divide-[#1F2633]">
+            <thead><tr className="text-xs text-[#64748B] text-left"><th className="px-4 py-2">Tarih</th><th>Coin</th><th>Tür</th><th>Yön</th><th className="text-right">Adet</th><th className="text-right">Fiyat</th><th className="text-right">Tutar</th><th>Durum</th></tr></thead>
+            <tbody className="divide-y divide-[#E2E8F0]">
               {orders.map((o) => (
                 <tr key={o.order_id}>
-                  <td className="px-4 py-2 text-xs text-[#94A3B8]">{new Date(o.created_at).toLocaleString("tr-TR")}</td>
+                  <td className="px-4 py-2 text-xs text-[#64748B]">{new Date(o.created_at).toLocaleString("tr-TR")}</td>
                   <td>{o.symbol}</td>
                   <td>{o.order_type === "market" ? "Market" : "Limit"}</td>
-                  <td className={o.side==="buy"?"text-[#10B981]":"text-[#EF4444]"}>{o.side==="buy"?"Al":"Sat"}</td>
+                  <td className={o.side==="buy"?"text-[#16A34A]":"text-[#DC2626]"}>{o.side==="buy"?"Al":"Sat"}</td>
                   <td className="text-right tabular">{formatNumber(o.quantity)}</td>
                   <td className="text-right tabular">{formatTRY(o.price)}</td>
                   <td className="text-right tabular">{formatTRY(o.amount_try)}</td>
@@ -33,19 +33,19 @@ export default function History() {
               ))}
             </tbody>
           </table>
-          {orders.length === 0 && <div className="p-6 text-center text-sm text-[#94A3B8]">Henüz emir yok</div>}
+          {orders.length === 0 && <div className="p-6 text-center text-sm text-[#64748B]">Henüz emir yok</div>}
         </div>
       </div>
 
       <div className="card-surface">
-        <div className="p-4 border-b border-[#1F2633] text-sm font-medium">Para Hareketleri</div>
+        <div className="p-4 border-b border-[#E2E8F0] text-sm font-medium">Para Hareketleri</div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-xs text-[#94A3B8] text-left"><th className="px-4 py-2">Tarih</th><th>Tür</th><th>Coin</th><th className="text-right">Tutar</th></tr></thead>
-            <tbody className="divide-y divide-[#1F2633]">
+            <thead><tr className="text-xs text-[#64748B] text-left"><th className="px-4 py-2">Tarih</th><th>Tür</th><th>Coin</th><th className="text-right">Tutar</th></tr></thead>
+            <tbody className="divide-y divide-[#E2E8F0]">
               {txs.map((t, i) => (
                 <tr key={i}>
-                  <td className="px-4 py-2 text-xs text-[#94A3B8]">{new Date(t.created_at).toLocaleString("tr-TR")}</td>
+                  <td className="px-4 py-2 text-xs text-[#64748B]">{new Date(t.created_at).toLocaleString("tr-TR")}</td>
                   <td>{({deposit:"Yatırma",withdrawal:"Çekme",trade:t.side==="buy"?"Alış":"Satış"})[t.type]}</td>
                   <td>{t.symbol || "TRY"}</td>
                   <td className="text-right tabular">{formatTRY(t.amount_try)}</td>
@@ -53,7 +53,7 @@ export default function History() {
               ))}
             </tbody>
           </table>
-          {txs.length === 0 && <div className="p-6 text-center text-sm text-[#94A3B8]">Henüz işlem yok</div>}
+          {txs.length === 0 && <div className="p-6 text-center text-sm text-[#64748B]">Henüz işlem yok</div>}
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ export default function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#070A0F] text-[#94A3B8]">
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F9FC] text-[#64748B]">
         <div className="animate-pulse">Yükleniyor...</div>
       </div>
     );

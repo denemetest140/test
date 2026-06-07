@@ -62,32 +62,32 @@ export default function Transfer() {
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto anim-fade-up">
       <div className="mb-6">
         <h1 className="font-display text-2xl sm:text-3xl">Kullanıcılar Arası Transfer</h1>
-        <p className="text-[#94A3B8] text-sm mt-1">Coinberx kullanıcılarına anında ve ücretsize yakın coin gönderin. Ağ ücreti yok.</p>
+        <p className="text-[#64748B] text-sm mt-1">Coinberx kullanıcılarına anında ve ücretsize yakın coin gönderin. Ağ ücreti yok.</p>
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
         <div className="card-surface p-5 lg:col-span-3" data-testid="transfer-form">
-          <div className="text-xs text-[#94A3B8] mb-3">Coin Seç</div>
+          <div className="text-xs text-[#64748B] mb-3">Coin Seç</div>
           <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-thin">
             {choosableCoins.map((a) => (
               <button
                 key={a.symbol}
                 onClick={() => setSym(a.symbol)}
-                className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg border transition ${sym===a.symbol?"border-[#DCA335] bg-[#DCA335]/10":"border-[#1F2633] bg-[#0B0E14] hover:border-[#2A3344]"}`}
+                className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg border transition ${sym===a.symbol?"border-[#16A34A] bg-[#16A34A]/10":"border-[#E2E8F0] bg-[#FFFFFF] hover:border-[#CBD5E1]"}`}
                 data-testid={`tr-coin-${a.symbol}`}
               >
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${a.symbol==="BERX"?"bg-[#DCA335]/20 text-[#DCA335]":"bg-[#1F2633]"}`}>{a.symbol.slice(0,2)}</div>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${a.symbol==="BERX"?"bg-[#16A34A]/20 text-[#16A34A]":"bg-[#E2E8F0]"}`}>{a.symbol.slice(0,2)}</div>
                 <div className="text-left">
                   <div className="text-sm">{a.symbol}</div>
-                  <div className="text-[10px] text-[#94A3B8] tabular">{formatNumber(a.amount)}</div>
+                  <div className="text-[10px] text-[#64748B] tabular">{formatNumber(a.amount)}</div>
                 </div>
               </button>
             ))}
           </div>
 
-          <div className="text-xs text-[#94A3B8] mb-2">Alıcı (e-posta, kullanıcı adı, referans kodu veya ID)</div>
+          <div className="text-xs text-[#64748B] mb-2">Alıcı (e-posta, kullanıcı adı, referans kodu veya ID)</div>
           <div className="relative mb-1">
-            <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+            <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
             <input
               data-testid="tr-recipient"
               value={recipient}
@@ -99,36 +99,36 @@ export default function Transfer() {
           <div className="min-h-[42px] mb-3">
             {recipient.length >= 3 && (
               lookup ? (
-                <div className="bg-[#10B981]/10 border border-[#10B981]/40 rounded-lg px-3 py-2 flex items-center gap-2 text-xs" data-testid="tr-recipient-found">
-                  <CheckCircle size={14} weight="fill" className="text-[#10B981]"/>
-                  <div className="flex-1"><div className="font-medium text-[#F8FAFC]">{lookup.name}</div><div className="text-[#94A3B8]">{lookup.email} · Kod: {lookup.referral_code}</div></div>
+                <div className="bg-[#16A34A]/10 border border-[#16A34A]/40 rounded-lg px-3 py-2 flex items-center gap-2 text-xs" data-testid="tr-recipient-found">
+                  <CheckCircle size={14} weight="fill" className="text-[#16A34A]"/>
+                  <div className="flex-1"><div className="font-medium text-[#0F172A]">{lookup.name}</div><div className="text-[#64748B]">{lookup.email} · Kod: {lookup.referral_code}</div></div>
                 </div>
               ) : (
-                <div className="bg-[#EF4444]/10 border border-[#EF4444]/40 rounded-lg px-3 py-2 flex items-center gap-2 text-xs text-[#EF4444]">
+                <div className="bg-[#DC2626]/10 border border-[#DC2626]/40 rounded-lg px-3 py-2 flex items-center gap-2 text-xs text-[#DC2626]">
                   <Warning size={14} weight="fill"/> Kullanıcı bulunamadı
                 </div>
               )
             )}
           </div>
 
-          <div className="text-xs text-[#94A3B8] mb-2 flex justify-between">
+          <div className="text-xs text-[#64748B] mb-2 flex justify-between">
             <span>Tutar ({sym})</span>
-            <button onClick={() => setAmount(balance.toString())} className="text-[#DCA335]" data-testid="tr-max">MAX</button>
+            <button onClick={() => setAmount(balance.toString())} className="text-[#16A34A]" data-testid="tr-max">MAX</button>
           </div>
           <input data-testid="tr-amount" type="number" className="input-field mb-1 tabular text-lg" value={amount} onChange={(e) => setAmount(e.target.value)} step="any" placeholder="0.00"/>
-          <div className="text-xs text-[#94A3B8] tabular mb-4">Kullanılabilir: {formatNumber(balance)} {sym}</div>
+          <div className="text-xs text-[#64748B] tabular mb-4">Kullanılabilir: {formatNumber(balance)} {sym}</div>
 
-          <div className="text-xs text-[#94A3B8] mb-2">Not (opsiyonel)</div>
+          <div className="text-xs text-[#64748B] mb-2">Not (opsiyonel)</div>
           <input data-testid="tr-note" className="input-field mb-5" maxLength={140} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Kısa not..."/>
 
-          <div className="bg-[#0B0E14] border border-[#1F2633] rounded-lg p-3 text-xs space-y-1.5 mb-5">
-            <div className="flex justify-between"><span className="text-[#94A3B8]">Tutar</span><span className="tabular">{formatNumber(amountN)} {sym}</span></div>
-            <div className="flex justify-between"><span className="text-[#94A3B8]">Komisyon ({(feePct*100).toFixed(2)}%)</span><span className="tabular">{formatNumber(fee)} {sym}</span></div>
-            <div className="flex justify-between pt-1.5 border-t border-[#1F2633] font-medium"><span>Toplam</span><span className="tabular">{formatNumber(total)} {sym}</span></div>
+          <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg p-3 text-xs space-y-1.5 mb-5">
+            <div className="flex justify-between"><span className="text-[#64748B]">Tutar</span><span className="tabular">{formatNumber(amountN)} {sym}</span></div>
+            <div className="flex justify-between"><span className="text-[#64748B]">Komisyon ({(feePct*100).toFixed(2)}%)</span><span className="tabular">{formatNumber(fee)} {sym}</span></div>
+            <div className="flex justify-between pt-1.5 border-t border-[#E2E8F0] font-medium"><span>Toplam</span><span className="tabular">{formatNumber(total)} {sym}</span></div>
           </div>
 
           {insufficient && amountN > 0 && (
-            <div className="bg-[#EF4444]/10 border border-[#EF4444]/40 rounded-lg px-3 py-2 text-xs text-[#EF4444] mb-3 flex items-center gap-2">
+            <div className="bg-[#DC2626]/10 border border-[#DC2626]/40 rounded-lg px-3 py-2 text-xs text-[#DC2626] mb-3 flex items-center gap-2">
               <Warning size={14} weight="fill"/> Yetersiz bakiye (komisyon dahil)
             </div>
           )}
@@ -144,33 +144,33 @@ export default function Transfer() {
         </div>
 
         <div className="card-surface p-5 lg:col-span-2">
-          <div className="flex gap-1 border-b border-[#1F2633] mb-3">
+          <div className="flex gap-1 border-b border-[#E2E8F0] mb-3">
             <button onClick={() => setTab("received")} className={`tab-btn ${tab==="received"?"active":""}`} data-testid="tr-tab-received">Gelen ({hist.received.length})</button>
             <button onClick={() => setTab("sent")} className={`tab-btn ${tab==="sent"?"active":""}`} data-testid="tr-tab-sent">Giden ({hist.sent.length})</button>
           </div>
           <div className="space-y-2 max-h-[480px] overflow-y-auto scrollbar-thin">
             {(tab==="received"?hist.received:hist.sent).length === 0 ? (
-              <div className="text-sm text-[#94A3B8] py-8 text-center">Henüz kayıt yok</div>
+              <div className="text-sm text-[#64748B] py-8 text-center">Henüz kayıt yok</div>
             ) : (tab==="received"?hist.received:hist.sent).map((t) => {
               const inbound = tab === "received";
               return (
-                <div key={t.transfer_id} className="bg-[#0B0E14] border border-[#1F2633] rounded-lg p-3">
+                <div key={t.transfer_id} className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg p-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${inbound?"bg-[#10B981]/15 text-[#10B981]":"bg-[#EF4444]/15 text-[#EF4444]"}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${inbound?"bg-[#16A34A]/15 text-[#16A34A]":"bg-[#DC2626]/15 text-[#DC2626]"}`}>
                         {inbound ? <ArrowDown size={14} weight="bold"/> : <ArrowUp size={14} weight="bold"/>}
                       </div>
                       <div>
                         <div className="text-sm">{inbound?"Gelen":"Giden"} {t.symbol}</div>
-                        <div className="text-[11px] text-[#94A3B8]">{inbound ? t.sender_email : t.receiver_email}</div>
+                        <div className="text-[11px] text-[#64748B]">{inbound ? t.sender_email : t.receiver_email}</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={`tabular text-sm ${inbound?"text-[#10B981]":"text-[#EF4444]"}`}>{inbound?"+":"-"}{formatNumber(t.amount)}</div>
-                      <div className="text-[10px] text-[#94A3B8]">{new Date(t.created_at).toLocaleString("tr-TR")}</div>
+                      <div className={`tabular text-sm ${inbound?"text-[#16A34A]":"text-[#DC2626]"}`}>{inbound?"+":"-"}{formatNumber(t.amount)}</div>
+                      <div className="text-[10px] text-[#64748B]">{new Date(t.created_at).toLocaleString("tr-TR")}</div>
                     </div>
                   </div>
-                  {t.note && <div className="text-xs text-[#94A3B8] mt-2 italic">"{t.note}"</div>}
+                  {t.note && <div className="text-xs text-[#64748B] mt-2 italic">"{t.note}"</div>}
                 </div>
               );
             })}
@@ -183,17 +183,17 @@ export default function Transfer() {
           <div className="card-surface p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()} data-testid="tr-confirm">
             <h3 className="font-display text-xl mb-3">Transferi Onayla</h3>
             <div className="space-y-3 mb-5">
-              <div className="flex justify-between text-sm"><span className="text-[#94A3B8]">Alıcı</span><span>{lookup?.name}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-[#94A3B8]">E-posta</span><span className="tabular text-xs">{lookup?.email}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-[#94A3B8]">Tutar</span><span className="tabular">{formatNumber(amountN)} {sym}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-[#94A3B8]">Komisyon</span><span className="tabular">{formatNumber(fee)} {sym}</span></div>
-              <div className="flex justify-between text-sm pt-3 border-t border-[#1F2633] font-medium"><span>Düşecek Toplam</span><span className="tabular">{formatNumber(total)} {sym}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[#64748B]">Alıcı</span><span>{lookup?.name}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[#64748B]">E-posta</span><span className="tabular text-xs">{lookup?.email}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[#64748B]">Tutar</span><span className="tabular">{formatNumber(amountN)} {sym}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-[#64748B]">Komisyon</span><span className="tabular">{formatNumber(fee)} {sym}</span></div>
+              <div className="flex justify-between text-sm pt-3 border-t border-[#E2E8F0] font-medium"><span>Düşecek Toplam</span><span className="tabular">{formatNumber(total)} {sym}</span></div>
             </div>
-            <div className="bg-[#F59E0B]/10 border border-[#F59E0B]/30 rounded-lg px-3 py-2 text-xs text-[#F59E0B] mb-4 flex items-start gap-2">
+            <div className="bg-[#D97706]/10 border border-[#D97706]/30 rounded-lg px-3 py-2 text-xs text-[#D97706] mb-4 flex items-start gap-2">
               <Warning size={14} weight="fill" className="mt-0.5"/> Transfer geri alınamaz. Alıcı bilgilerini bir kez daha kontrol edin.
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setShowConfirm(false)} className="flex-1 py-2.5 rounded-lg border border-[#1F2633] text-sm" data-testid="tr-cancel">İptal</button>
+              <button onClick={() => setShowConfirm(false)} className="flex-1 py-2.5 rounded-lg border border-[#E2E8F0] text-sm" data-testid="tr-cancel">İptal</button>
               <button onClick={submit} disabled={loading} className="flex-1 btn-primary py-2.5 rounded-lg text-sm" data-testid="tr-confirm-btn">{loading?"...":"Onayla"}</button>
             </div>
           </div>

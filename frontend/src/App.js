@@ -34,7 +34,7 @@ const Gated = ({ children }) => (
 
 function Root() {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-[#070A0F]" />;
+  if (loading) return <div className="min-h-screen bg-[#F7F9FC]" />;
   return user ? <Navigate to="/dashboard" replace /> : <Landing />;
 }
 
@@ -80,7 +80,7 @@ export default function App() {
       <BrowserRouter>
         <AppRouter />
         <LiveActivity />
-        <Toaster theme="dark" position="top-right" richColors closeButton />
+        <Toaster theme="light" position="top-right" richColors closeButton />
       </BrowserRouter>
     </AuthProvider>
   );

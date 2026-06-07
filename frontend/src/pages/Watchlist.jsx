@@ -19,25 +19,25 @@ export default function Watchlist() {
       <h1 className="font-display text-3xl mb-6">İzleme Listem</h1>
       {rows.length === 0 ? (
         <div className="card-surface p-10 text-center">
-          <Star size={40} className="text-[#DCA335] mx-auto" />
-          <div className="text-sm text-[#94A3B8] mt-3">İzleme listenizde coin yok. <Link to="/markets" className="text-[#DCA335]">Piyasalardan ekleyin</Link></div>
+          <Star size={40} className="text-[#16A34A] mx-auto" />
+          <div className="text-sm text-[#64748B] mt-3">İzleme listenizde coin yok. <Link to="/markets" className="text-[#16A34A]">Piyasalardan ekleyin</Link></div>
         </div>
       ) : (
         <div className="card-surface overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-xs text-[#94A3B8] text-left"><th className="py-3 px-4">Coin</th><th className="text-right">Fiyat</th><th className="text-right">24s</th><th className="text-right">İşlem</th></tr></thead>
-            <tbody className="divide-y divide-[#1F2633]">
+            <thead><tr className="text-xs text-[#64748B] text-left"><th className="py-3 px-4">Coin</th><th className="text-right">Fiyat</th><th className="text-right">24s</th><th className="text-right">İşlem</th></tr></thead>
+            <tbody className="divide-y divide-[#E2E8F0]">
               {rows.map((m) => (
                 <tr key={m.symbol}>
                   <td className="py-3 px-4 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#1F2633] text-xs flex items-center justify-center font-semibold">{m.symbol.slice(0,2)}</div>
-                    <div><div className="font-medium">{m.symbol}/TRY</div><div className="text-xs text-[#94A3B8]">{m.name}</div></div>
+                    <div className="w-8 h-8 rounded-full bg-[#E2E8F0] text-xs flex items-center justify-center font-semibold">{m.symbol.slice(0,2)}</div>
+                    <div><div className="font-medium">{m.symbol}/TRY</div><div className="text-xs text-[#64748B]">{m.name}</div></div>
                   </td>
                   <td className="text-right tabular">{formatTRY(m.price_try)}</td>
-                  <td className={`text-right tabular ${m.change_24h>=0?"text-[#10B981]":"text-[#EF4444]"}`}>{formatPct(m.change_24h)}</td>
+                  <td className={`text-right tabular ${m.change_24h>=0?"text-[#16A34A]":"text-[#DC2626]"}`}>{formatPct(m.change_24h)}</td>
                   <td className="text-right pr-4">
-                    <Link to={`/trade/${m.symbol}`} className="text-[#DCA335] text-xs mr-3">Al-Sat</Link>
-                    <button onClick={() => remove(m.symbol)} className="text-[#EF4444] text-xs">Sil</button>
+                    <Link to={`/trade/${m.symbol}`} className="text-[#16A34A] text-xs mr-3">Al-Sat</Link>
+                    <button onClick={() => remove(m.symbol)} className="text-[#DC2626] text-xs">Sil</button>
                   </td>
                 </tr>
               ))}

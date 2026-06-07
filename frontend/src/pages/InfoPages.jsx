@@ -9,9 +9,9 @@ export function About() {
       <p>Coinberx, kullanıcılarımıza güvenli, hızlı ve şeffaf bir kripto al-sat deneyimi sunmak için kuruldu. Tüm arayüz, müşteri hizmetleri ve operasyonlarımız Türkçedir; yerel banka entegrasyonları ve düşük komisyon politikamızla rakiplerimizden ayrışırız.</p>
       <p>50'den fazla kripto varlık, anlık fiyat verisi, profesyonel grafikler ve dakikalar içinde tamamlanan IBAN yatırma akışı ile yatırımcılarımıza ihtiyaç duydukları her aracı sunuyoruz.</p>
       <div className="grid sm:grid-cols-3 gap-4 mt-8">
-        <div className="card-surface p-5"><div className="font-display text-2xl text-[#DCA335]">2024</div><div className="text-xs text-[#94A3B8] mt-1">Kuruluş yılı</div></div>
-        <div className="card-surface p-5"><div className="font-display text-2xl text-[#DCA335]">İstanbul</div><div className="text-xs text-[#94A3B8] mt-1">Merkez</div></div>
-        <div className="card-surface p-5"><div className="font-display text-2xl text-[#DCA335]">50+</div><div className="text-xs text-[#94A3B8] mt-1">Kripto varlık</div></div>
+        <div className="card-surface p-5"><div className="font-display text-2xl text-[#16A34A]">2024</div><div className="text-xs text-[#64748B] mt-1">Kuruluş yılı</div></div>
+        <div className="card-surface p-5"><div className="font-display text-2xl text-[#16A34A]">İstanbul</div><div className="text-xs text-[#64748B] mt-1">Merkez</div></div>
+        <div className="card-surface p-5"><div className="font-display text-2xl text-[#16A34A]">50+</div><div className="text-xs text-[#64748B] mt-1">Kripto varlık</div></div>
       </div>
     </InfoPage>
   );
@@ -28,9 +28,9 @@ export function Blog() {
       <div className="space-y-3 mt-2">
         {posts.map((p) => (
           <div key={p.t} className="card-surface p-5">
-            <div className="text-xs text-[#94A3B8]">{p.date}</div>
+            <div className="text-xs text-[#64748B]">{p.date}</div>
             <div className="font-display text-xl mt-1">{p.t}</div>
-            <div className="text-sm text-[#94A3B8] mt-2">{p.d}</div>
+            <div className="text-sm text-[#64748B] mt-2">{p.d}</div>
           </div>
         ))}
       </div>
@@ -45,7 +45,7 @@ export function Career() {
       <div className="space-y-3 mt-4">
         {["Senior Backend Engineer (Python)", "Mobile Developer (React Native)", "Trading Operations Specialist", "Müşteri Destek Uzmanı"].map((r) => (
           <div key={r} className="card-surface p-5 flex items-center justify-between">
-            <div><div className="font-medium">{r}</div><div className="text-xs text-[#94A3B8] mt-1">İstanbul · Tam zamanlı</div></div>
+            <div><div className="font-medium">{r}</div><div className="text-xs text-[#64748B] mt-1">İstanbul · Tam zamanlı</div></div>
             <a href="mailto:kariyer@coinberx.com" className="btn-primary px-4 py-2 rounded-lg text-sm">Başvur</a>
           </div>
         ))}
@@ -57,10 +57,10 @@ export function Career() {
 export function Press() {
   return (
     <InfoPage title="Basın" subtitle="Coinberx hakkında medya kaynakları ve basın bültenleri.">
-      <p>Basın ile ilgili tüm sorularınız için <a href="mailto:basin@coinberx.com" className="text-[#DCA335]">basin@coinberx.com</a> adresine yazabilirsiniz.</p>
+      <p>Basın ile ilgili tüm sorularınız için <a href="mailto:basin@coinberx.com" className="text-[#16A34A]">basin@coinberx.com</a> adresine yazabilirsiniz.</p>
       <div className="card-surface p-5 mt-4">
         <div className="font-display text-lg">Marka Kiti</div>
-        <div className="text-sm text-[#94A3B8] mt-1">Coinberx logoları, renk paleti ve marka rehberi.</div>
+        <div className="text-sm text-[#64748B] mt-1">Coinberx logoları, renk paleti ve marka rehberi.</div>
         <button className="btn-primary mt-4 px-4 py-2 rounded-lg text-sm">İndir (ZIP)</button>
       </div>
     </InfoPage>
@@ -78,9 +78,9 @@ export function Help() {
     <InfoPage title="Yardım Merkezi" subtitle="Sıkça sorulan konular ve adım adım rehberler.">
       <div className="grid sm:grid-cols-2 gap-4 mt-2">
         {topics.map((t) => (
-          <div key={t.t} className="card-surface p-5 hover:border-[#DCA335]/40 transition">
-            <div className="font-display text-lg text-[#DCA335]">{t.t}</div>
-            <div className="text-sm text-[#94A3B8] mt-2">{t.d}</div>
+          <div key={t.t} className="card-surface p-5 hover:border-[#16A34A]/40 transition">
+            <div className="font-display text-lg text-[#16A34A]">{t.t}</div>
+            <div className="text-sm text-[#64748B] mt-2">{t.d}</div>
           </div>
         ))}
       </div>
@@ -102,8 +102,8 @@ export function FAQ() {
       <div className="space-y-3 mt-2">
         {items.map(([q, a]) => (
           <div key={q} className="card-surface p-5">
-            <div className="font-medium text-[#DCA335]">{q}</div>
-            <div className="text-sm text-[#94A3B8] mt-2">{a}</div>
+            <div className="font-medium text-[#16A34A]">{q}</div>
+            <div className="text-sm text-[#64748B] mt-2">{a}</div>
           </div>
         ))}
       </div>
@@ -116,21 +116,21 @@ export function Contact() {
     <InfoPage title="İletişim" subtitle="Bize ulaşmanın en hızlı yolları.">
       <div className="grid sm:grid-cols-2 gap-4 mt-2">
         <div className="card-surface p-6">
-          <div className="text-xs text-[#94A3B8] uppercase">Müşteri Hizmetleri</div>
+          <div className="text-xs text-[#64748B] uppercase">Müşteri Hizmetleri</div>
           <div className="font-display text-lg mt-1">destek@coinberx.com</div>
-          <div className="text-sm text-[#94A3B8] mt-1">7/24 yanıt</div>
+          <div className="text-sm text-[#64748B] mt-1">7/24 yanıt</div>
         </div>
         <div className="card-surface p-6">
-          <div className="text-xs text-[#94A3B8] uppercase">Telefon</div>
+          <div className="text-xs text-[#64748B] uppercase">Telefon</div>
           <div className="font-display text-lg mt-1">0850 000 00 00</div>
-          <div className="text-sm text-[#94A3B8] mt-1">Pzt-Cum 09:00-18:00</div>
+          <div className="text-sm text-[#64748B] mt-1">Pzt-Cum 09:00-18:00</div>
         </div>
         <div className="card-surface p-6">
-          <div className="text-xs text-[#94A3B8] uppercase">Basın</div>
+          <div className="text-xs text-[#64748B] uppercase">Basın</div>
           <div className="font-display text-lg mt-1">basin@coinberx.com</div>
         </div>
         <div className="card-surface p-6">
-          <div className="text-xs text-[#94A3B8] uppercase">Adres</div>
+          <div className="text-xs text-[#64748B] uppercase">Adres</div>
           <div className="font-display text-base mt-1">Maslak / İstanbul</div>
         </div>
       </div>

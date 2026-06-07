@@ -12,17 +12,19 @@ import {
   Star,
   Headset,
   PaperPlaneTilt,
+  Coin,
 } from "@phosphor-icons/react";
 import { useAuth } from "../contexts/AuthContext";
 
 const navItems = [
   { to: "/dashboard", label: "Gösterge Paneli", icon: ChartPieSlice, testid: "nav-dashboard" },
   { to: "/markets", label: "Piyasalar", icon: Storefront, testid: "nav-markets" },
-  { to: "/trade/BTC", label: "Al-Sat", icon: ChartLineUp, testid: "nav-trade" },
+  { to: "/trade/BTC", label: "Spot İşlem", icon: ChartLineUp, testid: "nav-trade" },
   { to: "/wallet", label: "Cüzdan", icon: Wallet, testid: "nav-wallet" },
-  { to: "/transfer", label: "Gönder/Al", icon: PaperPlaneTilt, testid: "nav-transfer" },
+  { to: "/transfer", label: "Gönder / Al", icon: PaperPlaneTilt, testid: "nav-transfer" },
   { to: "/deposit", label: "TL Yatır", icon: ArrowsDownUp, testid: "nav-deposit" },
   { to: "/withdraw", label: "TL Çek", icon: ArrowsDownUp, testid: "nav-withdraw" },
+  { to: "/trade/BERX", label: "BERX Coin", icon: Coin, testid: "nav-berx" },
   { to: "/history", label: "Geçmiş", icon: Clock, testid: "nav-history" },
   { to: "/kyc", label: "KYC Doğrulama", icon: IdentificationCard, testid: "nav-kyc" },
   { to: "/watchlist", label: "İzleme Listesi", icon: Star, testid: "nav-watchlist" },
@@ -33,17 +35,20 @@ const navItems = [
 export default function Sidebar() {
   const { user } = useAuth();
   const location = useLocation();
-  const isTrade = location.pathname.startsWith("/trade");
+  const isTrade = location.pathname.startsWith("/trade") && !location.pathname.startsWith("/trade/BERX");
+  const isBerx = location.pathname === "/trade/BERX";
 
   return (
-    <aside className="w-[236px] shrink-0 hidden lg:flex flex-col border-r border-[#1F2633] bg-[#070A0F] sticky top-0 h-screen">
-      <div className="px-6 py-5 flex items-center gap-2 border-b border-[#1F2633]">
-        <div className="w-8 h-8 rounded-lg bg-[#DCA335] flex items-center justify-center text-black font-bold text-lg">C</div>
-        <span className="font-display text-xl tracking-tight">Coinberx</span>
+    <aside className="w-[236px] shrink-0 hidden lg:flex flex-col border-r border-[#E2E8F0] bg-white sticky top-0 h-screen">
+      <div className="px-6 py-5 flex items-center gap-2 border-b border-[#E2E8F0]">
+        <div className="w-9 h-9 rounded-lg bg-[#16A34A] flex items-center justify-center text-white font-bold text-lg shadow-sm">C</div>
+        <span className="font-display text-xl tracking-tight text-[#0F172A]">Coinberx</span>
       </div>
       <nav className="flex-1 py-3 overflow-y-auto scrollbar-thin">
         {navItems.map(({ to, label, icon: Icon, testid }) => {
-          const active = to === "/trade/BTC" ? isTrade : location.pathname === to;
+          let active = location.pathname === to;
+          if (to === "/trade/BTC") active = isTrade;
+          if (to === "/trade/BERX") active = isBerx;
           return (
             <NavLink
               key={to}
@@ -51,8 +56,8 @@ export default function Sidebar() {
               data-testid={testid}
               className={`flex items-center gap-3 px-6 py-2.5 text-sm transition-colors ${
                 active
-                  ? "text-white bg-[#11151E] border-l-2 border-[#DCA335]"
-                  : "text-[#94A3B8] hover:text-white hover:bg-[#11151E]"
+                  ? "text-[#16A34A] bg-[#F0FDF4] border-l-[3px] border-[#16A34A] font-medium"
+                  : "text-[#475569] hover:text-[#0F172A] hover:bg-[#F8FAFC]"
               }`}
             >
               <Icon size={18} weight={active ? "fill" : "regular"} />
@@ -65,8 +70,8 @@ export default function Sidebar() {
             to="/admin"
             data-testid="nav-admin"
             className={({ isActive }) =>
-              `flex items-center gap-3 px-6 py-2.5 text-sm mt-4 border-t border-[#1F2633] pt-4 ${
-                isActive ? "text-[#DCA335]" : "text-[#94A3B8] hover:text-white"
+              `flex items-center gap-3 px-6 py-2.5 text-sm mt-4 border-t border-[#E2E8F0] pt-4 ${
+                isActive ? "text-[#16A34A] font-medium" : "text-[#475569] hover:text-[#0F172A]"
               }`
             }
           >
@@ -74,9 +79,9 @@ export default function Sidebar() {
           </NavLink>
         )}
       </nav>
-      <div className="p-4 border-t border-[#1F2633] text-xs text-[#94A3B8]">
+      <div className="p-4 border-t border-[#E2E8F0] text-xs text-[#64748B]">
         <div>Destek: destek@coinberx.com</div>
-        <div className="mt-1">v1.0 · SPK Lisanslı (demo)</div>
+        <div className="mt-1">v1.0 · MASAK uyumlu</div>
       </div>
     </aside>
   );

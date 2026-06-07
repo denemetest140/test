@@ -266,6 +266,17 @@ class BerxAdjustIn(BaseModel):
     value: float  # absolute price for "set", percent for "adjust"
 
 
+class BerxSimulationIn(BaseModel):
+    enabled: Optional[bool] = None        # auto-simulation on/off
+    mode: Optional[str] = None             # "manual" | "auto"
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    max_daily_change_pct: Optional[float] = None
+    tick_interval_seconds: Optional[int] = None
+    volatility: Optional[float] = None     # 0.001 - 0.05 (per-tick stddev)
+    trend: Optional[float] = None          # -0.01 .. 0.01 drift per tick
+
+
 class SupportMessageIn(BaseModel):
     subject: str
     body: str
@@ -319,6 +330,43 @@ async def get_settings() -> dict:
         await db.system_settings.insert_one({"_id": "global", **DEFAULT_SETTINGS})
         return DEFAULT_SETTINGS.copy()
     return {**DEFAULT_SETTINGS, **{k: v for k, v in doc.items() if k != "_id"}}
+
+
+# -------------- Admin Activity Logging --------------
+async def log_admin_action(
+    admin: dict,
+    action: str,
+    entity_type: str,
+    entity_id: Optional[str] = None,
+    details: Optional[dict] = None,
+    request: Optional[Request] = None,
+):
+    """Persist an admin activity log entry. Best-effort, never raises."""
+    try:
+        ip = ""
+        ua = ""
+        if request is not None:
+            ip = request.client.host if request.client else ""
+            fwd = request.headers.get("x-forwarded-for")
+            if fwd:
+                ip = fwd.split(",")[0].strip()
+            ua = (request.headers.get("user-agent") or "")[:240]
+        await db.admin_activity_logs.insert_one(
+            {
+                "log_id": new_id("log_"),
+                "admin_user_id": admin.get("user_id"),
+                "admin_email": admin.get("email"),
+                "action": action,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "details": details or {},
+                "ip_address": ip,
+                "user_agent": ua,
+                "created_at": now_iso(),
+            }
+        )
+    except Exception as e:
+        logger.warning("admin log failed: %s", e)
 
 
 # -------------- Auth routes --------------
@@ -854,7 +902,7 @@ async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
                 raise HTTPException(status_code=400, detail="Yetersiz TL bakiye")
             await db.wallets.update_one(
                 {"user_id": user["user_id"]},
-                {"$inc": {f"balances.TRY": -required, f"balances.{symbol}": qty}},
+                {"$inc": {"balances.TRY": -required, f"balances.{symbol}": qty}},
             )
             await db.cost_basis.update_one(
                 {"user_id": user["user_id"]},
@@ -867,7 +915,7 @@ async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
             credit = amount - fee
             await db.wallets.update_one(
                 {"user_id": user["user_id"]},
-                {"$inc": {f"balances.{symbol}": -qty, f"balances.TRY": credit}},
+                {"$inc": {f"balances.{symbol}": -qty, "balances.TRY": credit}},
             )
             await db.cost_basis.update_one(
                 {"user_id": user["user_id"]},
@@ -996,8 +1044,9 @@ async def admin_users(admin: dict = Depends(require_admin)):
 
 
 @api.patch("/admin/users/{user_id}/status")
-async def admin_user_status(user_id: str, payload: AdminStatusIn, admin: dict = Depends(require_admin)):
+async def admin_user_status(user_id: str, payload: AdminStatusIn, request: Request, admin: dict = Depends(require_admin)):
     await db.users.update_one({"user_id": user_id}, {"$set": {"account_status": payload.status}})
+    await log_admin_action(admin, "user.status", "user", user_id, {"status": payload.status, "note": payload.note}, request)
     return {"ok": True}
 
 
@@ -1009,7 +1058,7 @@ async def admin_kyc(status: Optional[str] = None, admin: dict = Depends(require_
 
 
 @api.patch("/admin/kyc/{kyc_id}")
-async def admin_kyc_update(kyc_id: str, payload: AdminStatusIn, admin: dict = Depends(require_admin)):
+async def admin_kyc_update(kyc_id: str, payload: AdminStatusIn, request: Request, admin: dict = Depends(require_admin)):
     req = await db.kyc_requests.find_one({"kyc_id": kyc_id})
     if not req:
         raise HTTPException(status_code=404, detail="Bulunamadı")
@@ -1027,6 +1076,7 @@ async def admin_kyc_update(kyc_id: str, payload: AdminStatusIn, admin: dict = De
             f"Coinberx - {title}",
             render_status(title, f"<p>{payload.note or 'İşleminiz güncellendi.'}</p>"),
         )
+    await log_admin_action(admin, f"kyc.{payload.status}", "kyc", kyc_id, {"target_user": req["user_id"], "note": payload.note}, request)
     return {"ok": True}
 
 
@@ -1037,7 +1087,7 @@ async def admin_deposits(status: Optional[str] = None, admin: dict = Depends(req
 
 
 @api.patch("/admin/deposits/{deposit_id}")
-async def admin_deposit_update(deposit_id: str, payload: AdminStatusIn, admin: dict = Depends(require_admin)):
+async def admin_deposit_update(deposit_id: str, payload: AdminStatusIn, request: Request, admin: dict = Depends(require_admin)):
     dep = await db.deposits.find_one({"deposit_id": deposit_id})
     if not dep:
         raise HTTPException(status_code=404, detail="Bulunamadı")
@@ -1068,6 +1118,7 @@ async def admin_deposit_update(deposit_id: str, payload: AdminStatusIn, admin: d
         body = f"{dep['amount']:,.2f} TL yatırma işleminiz {'onaylandı ve hesabınıza eklendi.' if payload.status == 'approved' else 'reddedildi.'}"
         await push_notification(user["user_id"], title, body, "deposit")
         await send_email(user["email"], f"Coinberx - {title}", render_status(title, f"<p>{body}</p>"))
+    await log_admin_action(admin, f"deposit.{payload.status}", "deposit", deposit_id, {"amount": dep["amount"], "target_user": dep["user_id"], "note": payload.note}, request)
     return {"ok": True}
 
 
@@ -1078,7 +1129,7 @@ async def admin_withdrawals(status: Optional[str] = None, admin: dict = Depends(
 
 
 @api.patch("/admin/withdrawals/{withdrawal_id}")
-async def admin_withdrawal_update(withdrawal_id: str, payload: AdminStatusIn, admin: dict = Depends(require_admin)):
+async def admin_withdrawal_update(withdrawal_id: str, payload: AdminStatusIn, request: Request, admin: dict = Depends(require_admin)):
     wd = await db.withdrawals.find_one({"withdrawal_id": withdrawal_id})
     if not wd:
         raise HTTPException(status_code=404, detail="Bulunamadı")
@@ -1113,6 +1164,7 @@ async def admin_withdrawal_update(withdrawal_id: str, payload: AdminStatusIn, ad
         title = "Çekme Onaylandı" if payload.status == "approved" else "Çekme Reddedildi"
         await push_notification(user["user_id"], title, payload.note or "", "withdrawal")
         await send_email(user["email"], f"Coinberx - {title}", render_status(title, f"<p>{payload.note or ''}</p>"))
+    await log_admin_action(admin, f"withdrawal.{payload.status}", "withdrawal", withdrawal_id, {"amount": wd["amount"], "target_user": wd["user_id"], "iban": wd.get("iban"), "note": payload.note}, request)
     return {"ok": True}
 
 
@@ -1324,9 +1376,10 @@ async def admin_networks(admin: dict = Depends(require_admin)):
 
 
 @api.patch("/admin/networks/{code}")
-async def admin_network_update(code: str, data: NetworkUpdateIn, admin: dict = Depends(require_admin)):
+async def admin_network_update(code: str, data: NetworkUpdateIn, request: Request, admin: dict = Depends(require_admin)):
     upd = {k: v for k, v in data.model_dump(exclude_none=True).items()}
     result = await nw.update_network(db, code, upd)
+    await log_admin_action(admin, "network.update", "network", code, upd, request)
     return result
 
 
@@ -1355,7 +1408,7 @@ async def admin_crypto_withdrawals(status: Optional[str] = None, admin: dict = D
 
 
 @api.patch("/admin/crypto-withdrawals/{withdrawal_id}")
-async def admin_crypto_withdrawal_update(withdrawal_id: str, payload: AdminStatusIn, admin: dict = Depends(require_admin)):
+async def admin_crypto_withdrawal_update(withdrawal_id: str, payload: AdminStatusIn, request: Request, admin: dict = Depends(require_admin)):
     wd = await db.crypto_withdrawals.find_one({"withdrawal_id": withdrawal_id})
     if not wd:
         raise HTTPException(status_code=404, detail="Bulunamadı")
@@ -1379,24 +1432,111 @@ async def admin_crypto_withdrawal_update(withdrawal_id: str, payload: AdminStatu
     if user:
         title = f"{sym} Çekme {'Onaylandı' if payload.status=='approved' else 'Reddedildi'}"
         await push_notification(user["user_id"], title, payload.note or "", "withdrawal")
+    await log_admin_action(admin, f"crypto_withdrawal.{payload.status}", "crypto_withdrawal", withdrawal_id, {"symbol": sym, "amount": wd["amount"], "target_user": wd["user_id"], "network": wd.get("network")}, request)
     return {"ok": True}
 
 
 # -------------- BERX (admin-controlled) --------------
+DEFAULT_BERX_SIM = {
+    "enabled": False,
+    "mode": "manual",                # "manual" | "auto"
+    "min_price": 0.50,
+    "max_price": 5.00,
+    "max_daily_change_pct": 8.0,
+    "tick_interval_seconds": 30,
+    "volatility": 0.004,             # per-tick stddev
+    "trend": 0.0,                    # per-tick drift
+}
+
+
+async def get_berx_sim() -> dict:
+    doc = await db.berx_settings.find_one({"_id": "global"})
+    sim = (doc or {}).get("simulation") or {}
+    return {**DEFAULT_BERX_SIM, **sim}
+
+
+async def update_berx_sim(updates: dict) -> dict:
+    cur = await get_berx_sim()
+    cur.update({k: v for k, v in updates.items() if v is not None})
+    await db.berx_settings.update_one(
+        {"_id": "global"}, {"$set": {"simulation": cur}}, upsert=True
+    )
+    return cur
+
+
 @api.get("/admin/berx")
 async def admin_berx(admin: dict = Depends(require_admin)):
-    return await berx.get_ticker(db)
+    ticker = await berx.get_ticker(db)
+    sim = await get_berx_sim()
+    return {**ticker, "simulation": sim}
 
 
 @api.post("/admin/berx/price")
-async def admin_berx_price(data: BerxAdjustIn, admin: dict = Depends(require_admin)):
+async def admin_berx_price(data: BerxAdjustIn, request: Request, admin: dict = Depends(require_admin)):
     if data.action == "set":
         new_price = await berx.set_price(db, data.value)
     elif data.action == "adjust":
         new_price = await berx.adjust_price(db, data.value)
     else:
         raise HTTPException(status_code=400, detail="Geçersiz işlem")
+    await log_admin_action(admin, f"berx.{data.action}", "berx", None, {"value": data.value, "new_price": new_price}, request)
     return {"ok": True, "price_try": new_price}
+
+
+@api.patch("/admin/berx/simulation")
+async def admin_berx_simulation(data: BerxSimulationIn, request: Request, admin: dict = Depends(require_admin)):
+    upd = {k: v for k, v in data.model_dump(exclude_none=True).items()}
+    if "mode" in upd and upd["mode"] not in {"manual", "auto"}:
+        raise HTTPException(status_code=400, detail="Mod 'manual' veya 'auto' olmalı")
+    if "min_price" in upd and upd["min_price"] <= 0:
+        raise HTTPException(status_code=400, detail="min_price > 0 olmalı")
+    if "max_price" in upd and upd["max_price"] <= 0:
+        raise HTTPException(status_code=400, detail="max_price > 0 olmalı")
+    new_sim = await update_berx_sim(upd)
+    await log_admin_action(admin, "berx.simulation", "berx", None, upd, request)
+    return new_sim
+
+
+# -------------- Admin Activity Logs --------------
+@api.get("/admin/activity-logs")
+async def admin_activity_logs(
+    limit: int = 100,
+    action: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    admin: dict = Depends(require_admin),
+):
+    q = {}
+    if action:
+        q["action"] = action
+    if entity_type:
+        q["entity_type"] = entity_type
+    rows = await db.admin_activity_logs.find(q, {"_id": 0}).sort("created_at", -1).limit(min(limit, 500)).to_list(500)
+    return rows
+
+
+# -------------- Platform recent trades (real, anonymised) --------------
+@api.get("/platform/recent-trades")
+async def platform_recent_trades(limit: int = 5):
+    """Return latest real spot trades across the platform with masked user labels."""
+    limit = max(1, min(limit, 25))
+    rows = await db.transactions.find(
+        {"type": "trade"}, {"_id": 0}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    out = []
+    for r in rows:
+        # mask email/name into "K***"
+        user = await db.users.find_one({"user_id": r["user_id"]}, {"_id": 0, "email": 1, "name": 1})
+        label = (user or {}).get("email") or (user or {}).get("name") or "Kullanıcı"
+        out.append({
+            "id": r.get("order_id") or new_id("ev_"),
+            "user_label": label,
+            "symbol": r.get("symbol"),
+            "side": r.get("side"),
+            "amount_try": r.get("amount_try", 0.0),
+            "quantity": r.get("quantity", 0.0),
+            "created_at": r.get("created_at"),
+        })
+    return out
 
 
 # -------------- Support --------------
@@ -1464,10 +1604,11 @@ async def admin_get_settings(admin: dict = Depends(require_admin)):
 
 
 @api.patch("/admin/settings")
-async def admin_update_settings(data: SettingsIn, admin: dict = Depends(require_admin)):
+async def admin_update_settings(data: SettingsIn, request: Request, admin: dict = Depends(require_admin)):
     upd = {k: v for k, v in data.model_dump(exclude_none=True).items()}
     if upd:
         await db.system_settings.update_one({"_id": "global"}, {"$set": upd}, upsert=True)
+    await log_admin_action(admin, "settings.update", "settings", "global", upd, request)
     return await get_settings()
 
 
@@ -1477,6 +1618,48 @@ async def root():
 
 
 app.include_router(api)
+
+
+# -------------- BERX auto-simulation background task --------------
+import asyncio
+
+
+async def _berx_simulation_loop():
+    """Tick BERX price using configurable random walk when sim.enabled and mode == 'auto'."""
+    # Track day start price for daily-cap enforcement.
+    day_start_price = None
+    day_start_at = None
+    while True:
+        try:
+            sim = await get_berx_sim()
+            interval = max(5, int(sim.get("tick_interval_seconds", 30)))
+            if sim.get("enabled") and sim.get("mode") == "auto":
+                cur = await berx.get_berx_price(db)
+                if day_start_price is None or (day_start_at and (now_dt() - day_start_at).total_seconds() > 86400):
+                    day_start_price = cur
+                    day_start_at = now_dt()
+                # random walk with drift + volatility
+                vol = float(sim.get("volatility", 0.004))
+                trend = float(sim.get("trend", 0.0))
+                step = trend + random.gauss(0, vol)
+                new_price = cur * (1 + step)
+                # clamp to min/max
+                mn = float(sim.get("min_price", 0.1))
+                mx = float(sim.get("max_price", 100.0))
+                new_price = max(mn, min(mx, new_price))
+                # enforce daily change cap
+                cap = float(sim.get("max_daily_change_pct", 8.0)) / 100.0
+                if day_start_price:
+                    upper = day_start_price * (1 + cap)
+                    lower = day_start_price * (1 - cap)
+                    new_price = max(lower, min(upper, new_price))
+                await berx.push_tick(db, new_price)
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning("berx sim tick failed: %s", e)
+            await asyncio.sleep(10)
 
 
 # -------------- Startup --------------
@@ -1492,9 +1675,12 @@ async def on_startup():
     await db.internal_transfers.create_index([("sender_id", 1), ("created_at", -1)])
     await db.internal_transfers.create_index([("receiver_id", 1), ("created_at", -1)])
     await db.deposit_addresses.create_index([("user_id", 1), ("symbol", 1), ("network", 1)], unique=True)
+    await db.admin_activity_logs.create_index([("created_at", -1)])
     init_storage()
     await berx.seed_berx(db)
     await nw.seed_networks(db)
+    # start BERX auto-simulation loop (no-op until enabled by admin)
+    app.state.berx_sim_task = asyncio.create_task(_berx_simulation_loop())
 
     # seed admin
     admin_email = os.environ.get("ADMIN_EMAIL")
@@ -1528,4 +1714,11 @@ async def on_startup():
 
 @app.on_event("shutdown")
 async def on_shutdown():
+    task = getattr(app.state, "berx_sim_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except Exception:
+            pass
     mongo_client.close()
