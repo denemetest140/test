@@ -1,158 +1,271 @@
-import { useEffect, useState } from "react";
+// Coinberx — Wallet (Cüzdan)
+// CoinTR ilhamlı yapı: sol sidebar, ana alanda Toplam Varlık + Hızlı İşlemler + Varlık Tablosu.
+import { useEffect, useMemo, useState } from "react";
 import { api, formatTRY, formatNumber, formatPct } from "../lib/api";
 import { Link } from "react-router-dom";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { ArrowDown, ArrowUp, PaperPlaneTilt } from "@phosphor-icons/react";
-import AssetDetailModal from "../components/AssetDetailModal";
-
-const COLORS = ["#16A34A", "#16A34A", "#3B82F6", "#8B5CF6", "#EC4899", "#D97706", "#06B6D4", "#F97316"];
+import { Eye, EyeSlash, ArrowDown, ArrowUp, PaperPlaneTilt, MagnifyingGlass, ShoppingBagOpen, Wallet as WalletIcon, Receipt, ArrowsLeftRight, Clock, House } from "@phosphor-icons/react";
+import { CoinIcon } from "../lib/coinIcons.jsx";
 
 export default function Wallet() {
+  const [view, setView] = useState("overview"); // overview | spot | deposits | withdrawals | transfers | history
+  const [hide, setHide] = useState(false);
   const [w, setW] = useState(null);
   const [markets, setMarkets] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [txs, setTxs] = useState([]);
+  const [search, setSearch] = useState("");
+  const [onlyOwned, setOnlyOwned] = useState(true);
 
   const reload = () => {
     api.get("/wallet").then((r) => setW(r.data)).catch(() => {});
     api.get("/markets").then((r) => setMarkets(r.data || [])).catch(() => {});
+    api.get("/wallet/transactions?limit=50").then((r) => setTxs(r.data || [])).catch(() => {});
   };
-  useEffect(() => {
-    reload();
-    const t = setInterval(reload, 15000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { reload(); const t = setInterval(reload, 15000); return () => clearInterval(t); }, []);
 
   const change = (sym) => markets.find((m) => m.symbol === sym)?.change_24h ?? 0;
-  const assets = (w?.assets || []).filter((a) => a.amount > 0.0000001 || a.symbol === "TRY");
-  const pieData = assets.filter((a) => a.value_try > 1);
+  const priceOf = (sym) => markets.find((m) => m.symbol === sym)?.price_try ?? 0;
+  const usdt = markets.find((m) => m.symbol === "USDT")?.price_try || 0;
+
+  const allAssets = w?.assets || [];
+  const owned = allAssets.filter((a) => a.amount > 0.0000001 || (a.locked || 0) > 0 || a.symbol === "TRY");
+  const baseList = onlyOwned ? owned : allAssets;
+  const filtered = useMemo(() => baseList.filter((a) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return a.symbol.toLowerCase().includes(q) || (markets.find((m) => m.symbol === a.symbol)?.name || "").toLowerCase().includes(q);
+  }), [baseList, search, markets]);
+
+  const mask = (s) => hide ? "••••••" : s;
+  const totalTry = w?.total_try ?? 0;
+  const totalUsdt = usdt ? totalTry / usdt : 0;
+
+  const SIDE = [
+    { v: "overview", l: "Genel Bakış", Icon: House },
+    { v: "spot", l: "Spot Hesabı", Icon: WalletIcon },
+    { v: "deposits", l: "Yatırma", Icon: ArrowDown },
+    { v: "withdrawals", l: "Çekme", Icon: ArrowUp },
+    { v: "transfers", l: "Transfer", Icon: PaperPlaneTilt },
+    { v: "history", l: "İşlem Kayıtları", Icon: Clock },
+  ];
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1440px] mx-auto anim-fade-up">
-      <div className="flex items-end justify-between flex-wrap gap-4 mb-8">
-        <div>
-          <h1 className="font-display text-3xl">Cüzdan</h1>
-          <p className="text-[#64748B] text-sm mt-1">Tüm varlıklarınız tek ekranda · TL ve 50+ kripto</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Link to="/deposit" className="btn-primary px-4 py-2 rounded-lg text-sm" data-testid="wallet-deposit">TL Yatır</Link>
-          <Link to="/withdraw" className="px-4 py-2 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm" data-testid="wallet-withdraw">TL Çek</Link>
-          <Link to="/transfer" className="px-4 py-2 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm flex items-center gap-1" data-testid="wallet-transfer"><PaperPlaneTilt size={14}/> Transfer</Link>
-          <Link to="/trade/BTC" className="px-4 py-2 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm" data-testid="wallet-trade">Al-Sat</Link>
-        </div>
-      </div>
+    <div className="p-4 lg:p-8 max-w-[1440px] mx-auto anim-fade-up">
+      <div className="text-xs text-[#64748B] mb-2">Coinberx / Cüzdan</div>
+      <h1 className="font-display text-2xl lg:text-3xl text-[#0F172A] mb-6">Cüzdanım</h1>
 
-      <div className="grid lg:grid-cols-3 gap-4 mb-8">
-        <div className="card-surface p-5">
-          <div className="text-xs text-[#64748B]">Toplam Portföy</div>
-          <div className="font-display text-3xl tabular mt-1" data-testid="wallet-total">{formatTRY(w?.total_try ?? 0)}</div>
-          <div className="text-xs text-[#64748B] mt-2 tabular">{assets.length} varlık</div>
-        </div>
-        <div className="card-surface p-5">
-          <div className="text-xs text-[#64748B]">Toplam Yatırılan</div>
-          <div className="font-display text-3xl tabular mt-1">{formatTRY(w?.invested_try ?? 0)}</div>
-          <div className="text-xs text-[#64748B] mt-2">Kümülatif alış tutarı</div>
-        </div>
-        <div className="card-surface p-5">
-          <div className="text-xs text-[#64748B]">Kâr / Zarar</div>
-          <div className={`font-display text-3xl tabular mt-1 ${(w?.pnl_try??0)>=0?"text-[#16A34A]":"text-[#DC2626]"}`} data-testid="wallet-pnl">
-            {(w?.pnl_try??0)>=0?"+":""}{formatTRY(w?.pnl_try ?? 0)}
+      <div className="grid lg:grid-cols-12 gap-6">
+        {/* Sidebar */}
+        <aside className="lg:col-span-3">
+          <div className="card-surface p-2 lg:sticky lg:top-20">
+            {SIDE.map(({ v, l, Icon }) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${view===v?"bg-[#F0FDF4] text-[#16A34A] font-medium":"text-[#475569] hover:bg-[#F8FAFC]"}`}
+                data-testid={`wallet-side-${v}`}
+              >
+                <Icon size={16} weight={view===v?"fill":"regular"}/> {l}
+              </button>
+            ))}
           </div>
-          <div className="text-xs text-[#64748B] mt-2">Piyasa fiyatlarıyla</div>
-        </div>
-      </div>
+        </aside>
 
-      <div className="grid lg:grid-cols-3 gap-6 mb-8">
-        <div className="card-surface p-5 lg:col-span-2">
-          <div className="text-xs text-[#64748B] mb-3">Varlıklarım</div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-[#64748B] text-left border-b border-[#E2E8F0]">
-                  <th className="pb-3">Varlık</th>
-                  <th className="pb-3 text-right">Miktar</th>
-                  <th className="pb-3 text-right hidden md:table-cell">Fiyat</th>
-                  <th className="pb-3 text-right hidden md:table-cell">24s</th>
-                  <th className="pb-3 text-right">TL Değeri</th>
-                  <th className="pb-3 text-right">Hızlı İşlem</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E2E8F0]">
-                {assets.map((a) => {
-                  const ch = change(a.symbol);
-                  const up = ch >= 0;
-                  return (
-                    <tr key={a.symbol} data-testid={`wallet-row-${a.symbol}`}>
-                      <td className="py-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${a.symbol==="TRY"?"bg-[#16A34A] text-black":a.symbol==="BERX"?"bg-[#16A34A]/20 text-[#16A34A]":"bg-[#E2E8F0]"}`}>{a.symbol === "TRY" ? "₺" : a.symbol.slice(0,2)}</div>
-                          <div>
-                            <div className="font-medium">{a.symbol === "TRY" ? "Türk Lirası" : a.symbol}</div>
-                            <div className="text-xs text-[#64748B]">{a.symbol === "TRY" ? "TL" : (a.symbol === "BERX" ? "Berx Token" : (markets.find(m=>m.symbol===a.symbol)?.name || ""))}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 text-right tabular">{formatNumber(a.amount)}{a.locked>0 && <span className="text-[10px] text-[#D97706] ml-2">+{formatNumber(a.locked)} kilitli</span>}</td>
-                      <td className="py-3 text-right tabular hidden md:table-cell">{a.symbol==="TRY"?"-":formatTRY(a.price_try, a.price_try < 1 ? 6 : 2)}</td>
-                      <td className={`py-3 text-right tabular hidden md:table-cell ${up?"text-[#16A34A]":"text-[#DC2626]"}`}>{a.symbol==="TRY"?"-":(
-                        <span className="inline-flex items-center gap-1">{up?<ArrowUp size={10} weight="bold"/>:<ArrowDown size={10} weight="bold"/>}{formatPct(ch)}</span>
-                      )}</td>
-                      <td className="py-3 text-right tabular font-medium">{formatTRY(a.value_try)}</td>
-                      <td className="py-3 text-right">
-                        <div className="flex gap-1 justify-end">
-                          {a.symbol === "TRY" ? (
-                            <>
-                              <Link to="/deposit" className="px-2.5 py-1 rounded bg-[#16A34A] text-white text-[11px] font-medium" data-testid={`wallet-try-deposit`}>Yatır</Link>
-                              <Link to="/withdraw" className="px-2.5 py-1 rounded bg-[#DC2626] text-white text-[11px] font-medium" data-testid={`wallet-try-withdraw`}>Çek</Link>
-                            </>
-                          ) : (
-                            <>
-                              <Link to={`/trade/${a.symbol}`} className="px-2.5 py-1 rounded bg-[#16A34A] text-white text-[11px] font-medium" data-testid={`wallet-buy-${a.symbol}`}>Al</Link>
-                              <Link to={`/trade/${a.symbol}`} className="px-2.5 py-1 rounded bg-[#DC2626] text-white text-[11px] font-medium" data-testid={`wallet-sell-${a.symbol}`}>Sat</Link>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {/* Main */}
+        <div className="lg:col-span-9 space-y-6">
+          {/* Summary card */}
+          <div className="card-surface p-6">
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs text-[#64748B]">
+                  Tahmini Bakiye <button onClick={() => setHide((v)=>!v)} className="hover:text-[#0F172A]" data-testid="wallet-hide">{hide?<EyeSlash size={14}/>:<Eye size={14}/>}</button>
+                </div>
+                <div className="font-display text-3xl lg:text-4xl tabular mt-1 text-[#0F172A]" data-testid="wallet-total">
+                  {mask(formatTRY(totalTry, 2))}
+                </div>
+                <div className="text-xs text-[#64748B] tabular mt-1">
+                  ≈ {mask((totalUsdt).toLocaleString("tr-TR", { maximumFractionDigits: 2 }))} USDT
+                </div>
+                <div className="text-xs mt-2">
+                  Kâr/Zarar: <span className={`tabular ${(w?.pnl_try??0)>=0?"text-[#16A34A]":"text-[#DC2626]"}`}>
+                    {(w?.pnl_try??0)>=0?"+":""}{mask(formatTRY(w?.pnl_try ?? 0, 2))}
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <ActBtn to="/trade/BTC" label="Kripto Al" Icon={ShoppingBagOpen} primary testid="wallet-buy"/>
+                <ActBtn to="/deposit" label="Yatır" Icon={ArrowDown} testid="wallet-deposit"/>
+                <ActBtn to="/withdraw" label="Çek" Icon={ArrowUp} testid="wallet-withdraw"/>
+                <ActBtn to="/transfer" label="Gönder" Icon={PaperPlaneTilt} testid="wallet-transfer"/>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="card-surface p-5">
-          <div className="text-xs text-[#64748B] mb-3">Varlık Dağılımı</div>
-          {pieData.length === 0 ? (
-            <div className="text-sm text-[#64748B] py-10 text-center">Henüz varlığınız yok</div>
+          {/* View content */}
+          {view === "history" ? (
+            <HistoryView txs={txs} />
+          ) : view === "deposits" ? (
+            <RedirectCard title="TL ve Kripto Yatırma" desc="Yatırma akışlarına özel sayfadan erişin." to="/deposit" cta="Yatırma sayfasına git"/>
+          ) : view === "withdrawals" ? (
+            <RedirectCard title="TL ve Kripto Çekme" desc="Çekme talepleri için özel sayfa." to="/withdraw" cta="Çekme sayfasına git"/>
+          ) : view === "transfers" ? (
+            <RedirectCard title="Kullanıcılar Arası Transfer" desc="Coinberx içinde anında, ücretsiz transfer." to="/transfer" cta="Transfer sayfasına git"/>
           ) : (
-            <>
-              <div className="h-[220px]">
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value_try" nameKey="symbol" innerRadius={55} outerRadius={90} stroke="none">
-                      {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(v) => formatTRY(v)} contentStyle={{ background: "#FFFFFF", border: "1px solid #E2E8F0" }} />
-                  </PieChart>
-                </ResponsiveContainer>
+            <div className="card-surface">
+              <div className="p-4 border-b border-[#E2E8F0] flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="font-display text-lg text-[#0F172A]">Varlıklarım</div>
+                  <div className="text-xs text-[#64748B]">{filtered.length} varlık</div>
+                </div>
+                <div className="flex items-center gap-2 flex-1 max-w-xs min-w-[180px] bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg px-3 hover:border-[#16A34A] transition">
+                  <MagnifyingGlass size={14} className="text-[#64748B]"/>
+                  <input value={search} onChange={(e)=>setSearch(e.target.value)} className="bg-transparent outline-none py-1.5 text-sm flex-1" placeholder="Coin ara..." data-testid="wallet-search"/>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-[#475569] cursor-pointer">
+                  <input type="checkbox" checked={onlyOwned} onChange={(e)=>setOnlyOwned(e.target.checked)} className="rounded text-[#16A34A]" data-testid="wallet-only-owned"/>
+                  Sadece sahip olduklarım
+                </label>
               </div>
-              <div className="space-y-1.5 mt-3">
-                {pieData.slice(0, 6).map((a, i) => {
-                  const pct = (a.value_try / (w?.total_try || 1)) * 100;
-                  return (
-                    <div key={a.symbol} className="flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />{a.symbol}</span>
-                      <span className="tabular text-[#64748B]">{pct.toFixed(1)}%</span>
-                    </div>
-                  );
-                })}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-[#F8FAFC]">
+                    <tr className="text-xs text-[#64748B] text-left">
+                      <th className="py-3 px-4">Coin</th>
+                      <th className="py-3 px-4 text-right hidden md:table-cell">Available</th>
+                      <th className="py-3 px-4 text-right hidden md:table-cell">Locked</th>
+                      <th className="py-3 px-4 text-right">Total</th>
+                      <th className="py-3 px-4 text-right">TRY Değeri</th>
+                      <th className="py-3 px-4 text-right hidden lg:table-cell">24s</th>
+                      <th className="py-3 px-4 text-right">İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F1F5F9]">
+                    {filtered.length === 0 && (
+                      <tr><td colSpan={7} className="py-10 text-center text-sm text-[#64748B]">Sonuç bulunamadı</td></tr>
+                    )}
+                    {filtered.map((a) => {
+                      const ch = change(a.symbol);
+                      const up = ch >= 0;
+                      const locked = a.locked || 0;
+                      const total = a.amount + locked;
+                      const value = a.symbol === "TRY" ? total : total * priceOf(a.symbol);
+                      return (
+                        <tr key={a.symbol} className="hover:bg-[#F8FAFC]" data-testid={`wallet-row-${a.symbol}`}>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              {a.symbol === "TRY" ? (
+                                <span className="w-8 h-8 rounded-full bg-[#16A34A] text-white flex items-center justify-center font-bold text-sm">₺</span>
+                              ) : (
+                                <CoinIcon symbol={a.symbol} size={32}/>
+                              )}
+                              <div>
+                                <div className="font-medium text-sm">{a.symbol}</div>
+                                <div className="text-[10px] text-[#64748B]">{a.symbol === "TRY" ? "Türk Lirası" : (markets.find(m=>m.symbol===a.symbol)?.name || (a.symbol==="BERX"?"Berx Token":a.symbol))}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-right tabular text-xs hidden md:table-cell">{mask(formatNumber(a.amount))}</td>
+                          <td className="py-3 px-4 text-right tabular text-xs text-[#D97706] hidden md:table-cell">{mask(formatNumber(locked))}</td>
+                          <td className="py-3 px-4 text-right tabular text-sm font-medium">{mask(formatNumber(total))}</td>
+                          <td className="py-3 px-4 text-right tabular text-sm">{mask(formatTRY(value, 2))}</td>
+                          <td className="py-3 px-4 text-right tabular text-xs hidden lg:table-cell">{a.symbol==="TRY"?"-":(
+                            <span className={`inline-flex items-center gap-0.5 ${up?"text-[#16A34A]":"text-[#DC2626]"}`}>
+                              {up?<ArrowUp size={10} weight="bold"/>:<ArrowDown size={10} weight="bold"/>}{formatPct(ch)}
+                            </span>
+                          )}</td>
+                          <td className="py-3 px-4 text-right">
+                            <RowActions sym={a.symbol}/>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {selected && <AssetDetailModal asset={selected} onClose={() => setSelected(null)} onChanged={reload}/>}
+function ActBtn({ to, label, Icon, primary, testid }) {
+  const cls = primary ? "btn-primary" : "border border-[#E2E8F0] hover:bg-[#F8FAFC] text-[#0F172A]";
+  return (
+    <Link to={to} data-testid={testid} className={`${cls} rounded-lg px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition`}>
+      <Icon size={14} weight="fill"/> {label}
+    </Link>
+  );
+}
+
+function RowActions({ sym }) {
+  if (sym === "TRY") {
+    return (
+      <div className="inline-flex gap-1">
+        <Link to="/deposit" className="px-2 py-1 rounded bg-[#16A34A] text-white text-[10px] font-semibold hover:bg-[#15803D]">Yatır</Link>
+        <Link to="/withdraw" className="px-2 py-1 rounded border border-[#E2E8F0] text-[#475569] text-[10px] font-semibold hover:bg-[#F8FAFC]">Çek</Link>
+      </div>
+    );
+  }
+  return (
+    <div className="inline-flex gap-1">
+      <Link to={`/trade/${sym}`} className="px-2 py-1 rounded bg-[#16A34A] text-white text-[10px] font-semibold hover:bg-[#15803D]" data-testid={`wallet-buy-${sym}`}>Al</Link>
+      <Link to={`/trade/${sym}`} className="px-2 py-1 rounded bg-[#DC2626] text-white text-[10px] font-semibold hover:bg-red-700" data-testid={`wallet-sell-${sym}`}>Sat</Link>
+      <Link to={`/deposit?tab=crypto`} className="px-2 py-1 rounded border border-[#E2E8F0] text-[#475569] text-[10px] hover:bg-[#F8FAFC] hidden sm:inline-block">Yatır</Link>
+      <Link to={`/withdraw?tab=crypto`} className="px-2 py-1 rounded border border-[#E2E8F0] text-[#475569] text-[10px] hover:bg-[#F8FAFC] hidden sm:inline-block">Çek</Link>
+      <Link to="/transfer" className="px-2 py-1 rounded border border-[#E2E8F0] text-[#475569] text-[10px] hover:bg-[#F8FAFC] hidden md:inline-block">Gönder</Link>
+    </div>
+  );
+}
+
+function RedirectCard({ title, desc, to, cta }) {
+  return (
+    <div className="card-surface p-8 text-center">
+      <div className="font-display text-xl text-[#0F172A]">{title}</div>
+      <div className="text-sm text-[#64748B] mt-2">{desc}</div>
+      <Link to={to} className="btn-primary inline-block mt-4 px-5 py-2.5 rounded-lg text-sm">{cta}</Link>
+    </div>
+  );
+}
+
+function HistoryView({ txs }) {
+  return (
+    <div className="card-surface">
+      <div className="p-4 border-b border-[#E2E8F0] flex items-center gap-2">
+        <Receipt size={18} className="text-[#16A34A]"/>
+        <div className="font-display text-lg">İşlem Kayıtları</div>
+      </div>
+      {txs.length === 0 ? (
+        <div className="p-10 text-center text-sm text-[#64748B]">Henüz işlem yok</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-[#F8FAFC]">
+              <tr className="text-xs text-[#64748B] text-left">
+                <th className="px-4 py-3">Tarih</th>
+                <th>Tür</th>
+                <th>Coin</th>
+                <th className="text-right">Miktar / Tutar</th>
+                <th>Durum</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#F1F5F9]">
+              {txs.map((t) => (
+                <tr key={t.order_id || t.id || t.tx_hash || `${t.type}-${t.created_at}`} className="hover:bg-[#F8FAFC]">
+                  <td className="px-4 py-2 text-xs text-[#64748B]">{new Date(t.created_at).toLocaleString("tr-TR")}</td>
+                  <td className="py-2 text-sm capitalize">{t.type}</td>
+                  <td className="py-2 text-sm flex items-center gap-1.5">{t.symbol ? <><CoinIcon symbol={t.symbol} size={18}/>{t.symbol}</> : "—"}</td>
+                  <td className="py-2 text-right tabular text-sm">
+                    {t.amount_try ? formatTRY(t.amount_try) : (t.quantity ? `${t.quantity}` : "")}
+                  </td>
+                  <td className="py-2 text-xs">{t.status || "ok"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

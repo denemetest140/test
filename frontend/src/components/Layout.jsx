@@ -1,7 +1,6 @@
 import Sidebar from "./Sidebar";
 import TopNav from "./TopNav";
 import MobileBottomNav from "./MobileBottomNav";
-import SupportWidget from "./SupportWidget";
 import { useState } from "react";
 
 export default function Layout({ children }) {
@@ -21,7 +20,6 @@ export default function Layout({ children }) {
         <div className="flex-1 overflow-x-hidden pb-20 lg:pb-0">{children}</div>
       </main>
       <MobileBottomNav />
-      <SupportWidget />
     </div>
   );
 }

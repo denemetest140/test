@@ -24,6 +24,7 @@ import Admin from "./pages/Admin";
 import Support from "./pages/Support";
 import Transfer from "./pages/Transfer";
 import LiveActivity from "./components/LiveActivity";
+import SupportWidget from "./components/SupportWidget";
 import { About, Blog, Career, Press, Help, FAQ, Contact } from "./pages/InfoPages";
 
 const Gated = ({ children }) => (
@@ -80,6 +81,7 @@ export default function App() {
       <BrowserRouter>
         <AppRouter />
         <LiveActivity />
+        <SupportWidget />
         <Toaster theme="light" position="top-right" richColors closeButton />
       </BrowserRouter>
     </AuthProvider>

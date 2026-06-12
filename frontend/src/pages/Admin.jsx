@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api, formatTRY, errToStr } from "../lib/api";
 import { toast } from "sonner";
 
-const TABS = [["overview","Özet"],["users","Kullanıcılar"],["kyc","KYC"],["deposits","Yatırmalar"],["withdrawals","Çekmeler"],["cwithdrawals","Kripto Çekimleri"],["transfers","Transferler"],["networks","Ağlar"],["berx","BERX Coin"],["support","Destek"],["activity","Etkinlik Kayıtları"],["settings","Ayarlar"]];
+const TABS = [["overview","Özet"],["users","Kullanıcılar"],["kyc","KYC"],["deposits","Yatırmalar"],["withdrawals","Çekmeler"],["cwithdrawals","Kripto Çekimleri"],["transfers","Transferler"],["networks","Ağlar"],["addresses","Coin Adresleri"],["berx","BERX Coin"],["livechat","Canlı Destek"],["support","Destek Mesajları"],["activity","Etkinlik Kayıtları"],["settings","Ayarlar"]];
 
 export default function Admin() {
   const [tab, setTab] = useState("overview");
@@ -36,23 +36,26 @@ export default function Admin() {
       </div>
 
       {tab === "overview" && analytics && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            ["Toplam Kullanıcı", analytics.users_count],
-            ["Doğrulanmış", analytics.verified_users],
-            ["KYC Onaylı", analytics.kyc_approved],
-            ["KYC Bekleyen", analytics.kyc_pending],
-            ["Yatırma Bekleyen", analytics.deposits_pending],
-            ["Çekme Bekleyen", analytics.withdrawals_pending],
-            ["Toplam Emir", analytics.total_orders],
-            ["24s Hacim", formatTRY(analytics.volume_24h, 0)],
-          ].map(([k, v]) => (
-            <div key={k} className="card-surface p-5">
-              <div className="text-xs text-[#64748B]">{k}</div>
-              <div className="font-display text-2xl tabular mt-2">{v ?? 0}</div>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              ["Toplam Kullanıcı", analytics.users_count],
+              ["Doğrulanmış", analytics.verified_users],
+              ["KYC Onaylı", analytics.kyc_approved],
+              ["KYC Bekleyen", analytics.kyc_pending],
+              ["Yatırma Bekleyen", analytics.deposits_pending],
+              ["Çekme Bekleyen", analytics.withdrawals_pending],
+              ["Toplam Emir", analytics.total_orders],
+              ["24s Hacim", formatTRY(analytics.volume_24h, 0)],
+            ].map(([k, v]) => (
+              <div key={k} className="card-surface p-5">
+                <div className="text-xs text-[#64748B]">{k}</div>
+                <div className="font-display text-2xl tabular mt-2">{v ?? 0}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6"><LiveChatStatsCard /></div>
+        </>
       )}
 
       {tab === "users" && (
@@ -160,7 +163,11 @@ export default function Admin() {
 
       {tab === "berx" && <BerxPanel />}
 
+      {tab === "addresses" && <PlatformAddressesPanel />}
+
       {tab === "support" && <SupportPanel />}
+
+      {tab === "livechat" && <LiveChatPanel />}
 
       {tab === "activity" && <ActivityLogsPanel />}
 
@@ -594,6 +601,347 @@ function CryptoWithdrawalsPanel() {
         </tbody>
       </table>
       {rows.length === 0 && <div className="p-8 text-center text-sm text-[#64748B]">Kripto çekim yok</div>}
+    </div>
+  );
+}
+
+
+function LiveChatStatsCard() {
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    const load = () => api.get("/admin/live-chat/stats").then((r) => setStats(r.data)).catch(() => {});
+    load();
+    const t = setInterval(load, 12000);
+    return () => clearInterval(t);
+  }, []);
+  if (!stats) return null;
+  return (
+    <div className="card-surface p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="font-display text-base text-[#0F172A]">Canlı Destek Özeti</div>
+          <div className="text-xs text-[#64748B]">Anlık aktif sohbetler ve son mesajlar</div>
+        </div>
+        <div className="flex gap-2 text-xs">
+          <span className="px-2.5 py-1 rounded-full bg-amber-50 text-[#D97706] font-medium">Bekleyen: {stats.pending}</span>
+          <span className="px-2.5 py-1 rounded-full bg-green-50 text-[#16A34A] font-medium">Açık: {stats.open}</span>
+          <span className="px-2.5 py-1 rounded-full bg-[#F1F5F9] text-[#475569] font-medium">24s mesaj: {stats.messages_24h}</span>
+        </div>
+      </div>
+      {(stats.recent || []).length === 0 ? (
+        <div className="text-sm text-[#64748B] py-4 text-center">Son zamanlarda mesaj yok</div>
+      ) : (
+        <div className="divide-y divide-[#E2E8F0]">
+          {(stats.recent || []).map((m) => (
+            <div key={m.message_id} className="py-2 flex items-start gap-3 text-sm">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${m.sender==="admin"?"bg-blue-50 text-blue-700":"bg-green-50 text-[#16A34A]"}`}>{m.sender==="admin"?"Admin":"Kullanıcı"}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-[#64748B]">{m.sender_label} · {new Date(m.created_at).toLocaleString("tr-TR")}</div>
+                <div className="text-sm text-[#0F172A] truncate">{m.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LiveChatPanel() {
+  const [sessions, setSessions] = useState([]);
+  const [filter, setFilter] = useState("all"); // all | open | pending | closed
+  const [activeId, setActiveId] = useState(null);
+  const [active, setActive] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const listRef = useRef(null);
+
+  const loadList = async () => {
+    try {
+      const url = filter === "all" ? "/admin/live-chat/sessions" : `/admin/live-chat/sessions?status=${filter}`;
+      const { data } = await api.get(url);
+      setSessions(data || []);
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { loadList(); const t = setInterval(loadList, 8000); return () => clearInterval(t); }, [filter]);
+
+  const openSession = async (sid) => {
+    setActiveId(sid);
+    try {
+      const { data } = await api.get(`/admin/live-chat/sessions/${sid}`);
+      setActive(data.session);
+      setMessages(data.messages || []);
+      loadList();
+    } catch (e) { toast.error(errToStr(e)); }
+  };
+
+  // Poll active conversation
+  useEffect(() => {
+    if (!activeId) return;
+    const tick = async () => {
+      try {
+        const { data } = await api.get(`/admin/live-chat/sessions/${activeId}`);
+        setActive(data.session);
+        setMessages(data.messages || []);
+      } catch { /* ignore */ }
+    };
+    const t = setInterval(tick, 4000);
+    return () => clearInterval(t);
+  }, [activeId]);
+
+  useEffect(() => { listRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [messages.length, activeId]);
+
+  const reply = async (e) => {
+    e?.preventDefault();
+    const body = draft.trim();
+    if (!body || !activeId) return;
+    setSending(true);
+    try {
+      await api.post(`/admin/live-chat/sessions/${activeId}/reply`, { body });
+      setDraft("");
+      // immediate refresh
+      const { data } = await api.get(`/admin/live-chat/sessions/${activeId}`);
+      setActive(data.session); setMessages(data.messages || []);
+      loadList();
+    } catch (e) { toast.error(errToStr(e)); } finally { setSending(false); }
+  };
+
+  const setStatus = async (status) => {
+    if (!activeId) return;
+    try {
+      await api.patch(`/admin/live-chat/sessions/${activeId}/status`, { status });
+      toast.success("Durum güncellendi");
+      loadList();
+      openSession(activeId);
+    } catch (e) { toast.error(errToStr(e)); }
+  };
+
+  const statusChip = (s) => ({
+    open: "bg-green-50 text-[#16A34A]",
+    pending: "bg-amber-50 text-[#D97706]",
+    closed: "bg-[#F1F5F9] text-[#475569]",
+  }[s] || "bg-[#F1F5F9] text-[#475569]");
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-4 h-[calc(100vh-220px)] min-h-[520px]">
+      <div className="card-surface lg:col-span-1 flex flex-col overflow-hidden">
+        <div className="p-3 border-b border-[#E2E8F0] flex gap-1 flex-wrap">
+          {[["all","Tümü"],["pending","Bekleyen"],["open","Açık"],["closed","Kapalı"]].map(([k,l]) => (
+            <button key={k} onClick={() => setFilter(k)} className={`px-3 py-1 rounded-full text-xs font-medium ${filter===k?"bg-[#16A34A] text-white":"text-[#475569] hover:bg-[#F1F5F9]"}`} data-testid={`livechat-filter-${k}`}>{l}</button>
+          ))}
+        </div>
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
+          {sessions.length === 0 ? (
+            <div className="p-6 text-sm text-[#64748B] text-center">Sohbet yok</div>
+          ) : sessions.map((s) => (
+            <button key={s.session_id} onClick={() => openSession(s.session_id)} className={`w-full text-left p-3 border-b border-[#E2E8F0] hover:bg-[#F8FAFC] ${activeId===s.session_id?"bg-[#F0FDF4]":""}`} data-testid={`livechat-row-${s.session_id}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-[#0F172A] truncate">
+                    {s.name || "Ziyaretçi"}
+                    {s.user_id && <span className="ml-1 text-[10px] text-[#16A34A] font-semibold">[ÜYE]</span>}
+                  </div>
+                  <div className="text-xs text-[#64748B] truncate">{s.user_email || s.contact || s.visitor_id}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusChip(s.status)}`}>{s.status}</span>
+                  {(s.unread_admin_count || 0) > 0 && (
+                    <span className="bg-[#DC2626] text-white text-[10px] rounded-full px-1.5 min-w-[18px] text-center font-bold">{s.unread_admin_count}</span>
+                  )}
+                </div>
+              </div>
+              <div className="text-[10px] text-[#94A3B8] mt-1">{new Date(s.last_message_at).toLocaleString("tr-TR")}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="card-surface lg:col-span-2 flex flex-col overflow-hidden">
+        {!active ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-[#64748B]">Bir sohbet seçin</div>
+        ) : (
+          <>
+            <div className="p-3 border-b border-[#E2E8F0] flex items-center justify-between gap-2 flex-wrap">
+              <div className="min-w-0">
+                <div className="font-display text-base text-[#0F172A] truncate">{active.name || "Ziyaretçi"} {active.user_id && <span className="ml-1 text-[10px] text-[#16A34A] font-semibold">[ÜYE]</span>}</div>
+                <div className="text-xs text-[#64748B] truncate">{active.user_email || active.contact || "—"} · IP {active.ip_address || "—"}</div>
+                <div className="text-[10px] text-[#94A3B8] truncate" title={active.user_agent}>UA: {(active.user_agent||"—").slice(0, 80)}</div>
+                <div className="text-[10px] text-[#94A3B8] truncate">Sayfa: {active.page_url || "—"}</div>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${statusChip(active.status)}`}>{active.status}</span>
+                {active.status !== "closed" ? (
+                  <button onClick={() => setStatus("closed")} className="text-[10px] px-2 py-1 rounded border border-[#E2E8F0] hover:bg-[#F8FAFC]" data-testid="livechat-close-btn">Kapat</button>
+                ) : (
+                  <button onClick={() => setStatus("open")} className="text-[10px] px-2 py-1 rounded border border-[#E2E8F0] hover:bg-[#F8FAFC]" data-testid="livechat-reopen-btn">Yeniden Aç</button>
+                )}
+              </div>
+            </div>
+            <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-2 bg-[#F7F9FC]">
+              {messages.length === 0 ? (
+                <div className="text-sm text-[#64748B] text-center py-8">Henüz mesaj yok</div>
+              ) : messages.map((m) => {
+                const mine = m.sender === "admin";
+                return (
+                  <div key={m.message_id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[70%] rounded-2xl px-3 py-2 text-sm ${mine ? "bg-blue-50 text-[#0F172A] border border-blue-100" : "bg-white border border-[#E2E8F0] text-[#0F172A]"}`}>
+                      <div className={`text-[10px] font-semibold mb-0.5 ${mine?"text-blue-700":"text-[#16A34A]"}`}>{mine?"Sen (Admin)":m.sender_label}</div>
+                      <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                      <div className="text-[10px] mt-1 text-[#94A3B8]">{new Date(m.created_at).toLocaleString("tr-TR")}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <form onSubmit={reply} className="p-3 border-t border-[#E2E8F0] bg-white flex gap-2">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); reply(); } }}
+                placeholder="Yanıtınızı yazın..."
+                rows={1}
+                className="input-field text-sm flex-1 resize-none max-h-32"
+                data-testid="livechat-reply-input"
+                disabled={active.status === "closed"}
+              />
+              <button type="submit" disabled={sending || !draft.trim() || active.status === "closed"} className="btn-primary px-4 rounded-lg text-sm disabled:opacity-50" data-testid="livechat-reply-send">
+                {sending ? "..." : "Gönder"}
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function PlatformAddressesPanel() {
+  const [rows, setRows] = useState([]);
+  const [networks, setNetworks] = useState([]);
+  const COINS = ["BTC","ETH","USDT","BNB","SOL","XRP","ADA","DOGE","TRX","AVAX","MATIC","LINK","DOT","LTC","SHIB","TON","BERX","UNI","AAVE","ATOM","NEAR","FIL","ARB","OP","INJ"];
+  const [form, setForm] = useState({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true });
+  const [edit, setEdit] = useState(null);
+
+  const load = () => {
+    api.get("/admin/platform-addresses").then((r) => setRows(r.data || []));
+    api.get("/networks").then((r) => setNetworks(r.data || [])).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+
+  const save = async (e) => {
+    e?.preventDefault();
+    try {
+      await api.put("/admin/platform-addresses", {
+        ...form,
+        symbol: form.symbol.toUpperCase(),
+        network: form.network.toUpperCase(),
+        min_deposit: Number(form.min_deposit || 0),
+      });
+      toast.success("Adres kaydedildi");
+      setEdit(null);
+      setForm({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true });
+      load();
+    } catch (e) { toast.error(errToStr(e)); }
+  };
+
+  const remove = async (r) => {
+    if (!window.confirm(`${r.symbol}/${r.network} adresini silmek istediğine emin misin?`)) return;
+    try {
+      await api.delete(`/admin/platform-addresses/${r.symbol}/${r.network}`);
+      toast.success("Silindi");
+      load();
+    } catch (e) { toast.error(errToStr(e)); }
+  };
+
+  const startEdit = (r) => {
+    setEdit(`${r.symbol}:${r.network}`);
+    setForm({ symbol: r.symbol, network: r.network, address: r.address, warning: r.warning || "", min_deposit: r.min_deposit || 0, deposit_enabled: r.deposit_enabled !== false, withdraw_enabled: r.withdraw_enabled !== false });
+  };
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-4">
+      <form onSubmit={save} className="card-surface p-5 lg:col-span-1 space-y-3" data-testid="addr-form">
+        <div className="font-display text-base text-[#0F172A]">{edit ? `Adresi Düzenle: ${edit}` : "Yeni Coin + Ağ Adresi"}</div>
+        <div>
+          <label className="text-xs text-[#64748B]">Coin</label>
+          <select className="input-field text-sm mt-1" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} data-testid="addr-symbol">
+            {COINS.map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[#64748B]">Network</label>
+          <select className="input-field text-sm mt-1" value={form.network} onChange={(e) => setForm({ ...form, network: e.target.value })} data-testid="addr-network">
+            {networks.map((n) => <option key={n.code} value={n.code}>{n.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[#64748B]">Deposit Adresi</label>
+          <input className="input-field text-sm mt-1 font-mono" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="0x... veya TX adresi" data-testid="addr-address"/>
+        </div>
+        <div>
+          <label className="text-xs text-[#64748B]">Uyarı / Açıklama</label>
+          <textarea className="input-field text-sm mt-1 min-h-[60px]" value={form.warning} onChange={(e) => setForm({ ...form, warning: e.target.value })} placeholder="Örn: Yalnızca TRC20 ile gönderim yapın."/>
+        </div>
+        <div>
+          <label className="text-xs text-[#64748B]">Min Yatırma ({form.symbol})</label>
+          <input type="number" step="any" min="0" className="input-field text-sm mt-1 tabular" value={form.min_deposit} onChange={(e) => setForm({ ...form, min_deposit: e.target.value })}/>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex items-center gap-2 text-xs text-[#475569]">
+            <input type="checkbox" checked={form.deposit_enabled} onChange={(e) => setForm({ ...form, deposit_enabled: e.target.checked })}/> Yatırma aktif
+          </label>
+          <label className="flex items-center gap-2 text-xs text-[#475569]">
+            <input type="checkbox" checked={form.withdraw_enabled} onChange={(e) => setForm({ ...form, withdraw_enabled: e.target.checked })}/> Çekim aktif
+          </label>
+        </div>
+        <div className="flex gap-2">
+          <button type="submit" className="btn-primary px-4 py-2 rounded-lg text-sm flex-1" data-testid="addr-save">Kaydet</button>
+          {edit && <button type="button" onClick={() => { setEdit(null); setForm({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true }); }} className="px-4 py-2 rounded-lg border border-[#E2E8F0] text-sm">İptal</button>}
+        </div>
+      </form>
+
+      <div className="card-surface lg:col-span-2 overflow-hidden">
+        <div className="p-4 border-b border-[#E2E8F0]">
+          <div className="font-display text-base text-[#0F172A]">Kayıtlı Coin-Ağ Adresleri</div>
+          <div className="text-xs text-[#64748B]">Toplam {rows.length} kayıt · Kullanıcılar bu adresleri görür</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-[#F8FAFC]">
+              <tr className="text-xs text-[#64748B] text-left">
+                <th className="px-4 py-2">Coin</th>
+                <th>Ağ</th>
+                <th>Adres</th>
+                <th>Min</th>
+                <th>D / W</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E2E8F0]">
+              {rows.map((r) => (
+                <tr key={`${r.symbol}-${r.network}`} className="hover:bg-[#F8FAFC]">
+                  <td className="px-4 py-2 text-sm font-medium">{r.symbol}</td>
+                  <td className="text-xs text-[#475569]">{r.network}</td>
+                  <td className="font-mono text-[10px] text-[#0F172A] truncate max-w-[260px]" title={r.address}>{r.address}</td>
+                  <td className="text-xs tabular">{r.min_deposit ?? 0}</td>
+                  <td className="text-[10px]">
+                    <span className={`px-1.5 py-0.5 rounded mr-1 ${r.deposit_enabled?"bg-green-50 text-[#16A34A]":"bg-red-50 text-[#DC2626]"}`}>D:{r.deposit_enabled?"On":"Off"}</span>
+                    <span className={`px-1.5 py-0.5 rounded ${r.withdraw_enabled?"bg-green-50 text-[#16A34A]":"bg-red-50 text-[#DC2626]"}`}>W:{r.withdraw_enabled?"On":"Off"}</span>
+                  </td>
+                  <td className="text-right pr-3">
+                    <button onClick={() => startEdit(r)} className="text-xs text-[#16A34A] hover:underline mr-3" data-testid={`addr-edit-${r.symbol}-${r.network}`}>Düzenle</button>
+                    <button onClick={() => remove(r)} className="text-xs text-[#DC2626] hover:underline" data-testid={`addr-del-${r.symbol}-${r.network}`}>Sil</button>
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-[#64748B]">Henüz adres tanımlanmadı. Soldaki formdan ekleyin.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

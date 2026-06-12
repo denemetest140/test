@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatTRY, formatPct } from "../lib/api";
+import { CoinIcon } from "../lib/coinIcons.jsx";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -35,13 +36,13 @@ function HeroPriceCard({ coin, spark }) {
   const up = coin.change_24h >= 0;
   return (
     <div className="relative">
-      <div className="absolute -inset-6 bg-radial-gold blur-2xl opacity-70 pointer-events-none" />
-      <div className="card-surface relative p-6 w-full max-w-md backdrop-blur-xl">
+      <div className="absolute -inset-6 bg-radial-gold blur-2xl opacity-50 pointer-events-none" />
+      <div className="card-surface relative p-6 w-full max-w-md backdrop-blur-xl shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#16A34A]/15 text-[#16A34A] text-sm flex items-center justify-center font-bold">{coin.symbol.slice(0,2)}</div>
+            <CoinIcon symbol={coin.symbol} size={40}/>
             <div>
-              <div className="font-display text-lg">{coin.symbol}/TRY</div>
+              <div className="font-display text-lg text-[#0F172A]">{coin.symbol}<span className="text-[#94A3B8]">/TRY</span></div>
               <div className="text-xs text-[#64748B]">{coin.name}</div>
             </div>
           </div>
@@ -50,7 +51,7 @@ function HeroPriceCard({ coin, spark }) {
             {formatPct(coin.change_24h)}
           </div>
         </div>
-        <div className="font-display text-4xl tabular mt-4" data-testid="hero-btc-price">{formatTRY(coin.price_try)}</div>
+        <div className="font-display text-4xl tabular mt-4 text-[#0F172A]" data-testid="hero-btc-price">{formatTRY(coin.price_try)}</div>
         <div className="text-xs text-[#64748B] mt-1 tabular">24s hacim {formatTRY(coin.volume_24h_try, 0)}</div>
 
         <div className="h-20 mt-5 -mx-2">
@@ -93,7 +94,7 @@ function TickerBar({ coins }) {
           const up = c.change_24h >= 0;
           return (
             <Link to={`/trade/${c.symbol}`} key={i} className="flex items-center gap-2 px-6 text-sm">
-              <span className="w-6 h-6 rounded-full bg-[#E2E8F0] text-[10px] flex items-center justify-center font-semibold">{c.symbol.slice(0,2)}</span>
+              <CoinIcon symbol={c.symbol} size={20}/>
               <span className="font-medium">{c.symbol}</span>
               <span className="tabular text-[#64748B]">{formatTRY(c.price_try)}</span>
               <span className={`tabular text-xs ${up?"text-[#16A34A]":"text-[#DC2626]"}`}>{formatPct(c.change_24h)}</span>
@@ -119,7 +120,7 @@ function HighlightCard({ title, icon: Icon, tint, coin, spark }) {
         {title}
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-[#E2E8F0] text-xs flex items-center justify-center font-semibold">{coin.symbol.slice(0,2)}</div>
+        <CoinIcon symbol={coin.symbol} size={36}/>
         <div>
           <div className="font-display text-base">{coin.symbol}</div>
           <div className="text-[11px] text-[#64748B]">{coin.name}</div>
@@ -183,9 +184,9 @@ function RailCard({ coin, spark }) {
       className="shrink-0 w-[240px] card-surface p-4 hover:border-[#16A34A]/60 transition-all group relative overflow-hidden"
     >
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${coin.symbol==="BERX"?"bg-[#16A34A]/20 text-[#16A34A]":"bg-[#E2E8F0]"}`}>{coin.symbol.slice(0,2)}</div>
+        <CoinIcon symbol={coin.symbol} size={36}/>
         <div className="flex-1 min-w-0">
-          <div className="font-display text-base truncate">{coin.symbol}</div>
+          <div className="font-display text-base truncate text-[#0F172A]">{coin.symbol}</div>
           <div className="text-[11px] text-[#64748B] truncate">{coin.name}</div>
         </div>
         <Star size={14} className="text-[#CBD5E1] group-hover:text-[#16A34A]"/>
@@ -371,11 +372,12 @@ export default function Landing() {
               <span className="font-display text-xl tracking-tight">Coinberx</span>
             </Link>
             <nav className="hidden lg:flex items-center gap-6 text-sm text-[#475569]">
-              <a href="#markets" className="hover:text-[#16A34A] font-medium">Keşfet</a>
-              <a href="#markets" className="hover:text-[#16A34A] font-medium">Piyasalar</a>
+              <Link to="/markets" className="hover:text-[#16A34A] font-medium">Piyasalar</Link>
               <Link to="/login" className="hover:text-[#16A34A] font-medium">Spot İşlem</Link>
-              <a href="#why" className="hover:text-[#16A34A] font-medium">Neden Coinberx</a>
+              <Link to="/login" className="hover:text-[#16A34A] font-medium">Kolay Al/Sat</Link>
+              <Link to="/deposit" className="hover:text-[#16A34A] font-medium">Yatır/Çek</Link>
               <a href="#security" className="hover:text-[#16A34A] font-medium">Güvenlik</a>
+              <Link to="/support" className="hover:text-[#16A34A] font-medium">Destek</Link>
               <Link to="/blog" className="hover:text-[#16A34A] font-medium">Blog</Link>
             </nav>
           </div>

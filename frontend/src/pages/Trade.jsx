@@ -61,21 +61,33 @@ export default function Trade() {
     });
     chartRef.current = chart;
     seriesRef.current = series;
-    const onResize = () => chart.applyOptions({ width: chartContainer.current.clientWidth });
+    let disposed = false;
+    const onResize = () => {
+      if (disposed || !chartContainer.current) return;
+      try { chart.applyOptions({ width: chartContainer.current.clientWidth }); } catch { /* chart gone */ }
+    };
     onResize();
     window.addEventListener("resize", onResize);
     return () => {
+      disposed = true;
       window.removeEventListener("resize", onResize);
-      chart.remove();
+      try { chart.remove(); } catch { /* already disposed */ }
+      chartRef.current = null;
+      seriesRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     if (!seriesRef.current) return;
+    let cancelled = false;
     api.get(`/markets/${sym}/klines?interval=${interval}&limit=300`).then((r) => {
-      seriesRef.current.setData(r.data || []);
-      chartRef.current?.timeScale()?.fitContent();
+      if (cancelled || !seriesRef.current) return;
+      try {
+        seriesRef.current.setData(r.data || []);
+        chartRef.current?.timeScale()?.fitContent();
+      } catch { /* chart disposed */ }
     });
+    return () => { cancelled = true; };
   }, [sym, interval]);
 
   const balTRY = wallet?.assets?.find((a) => a.symbol === "TRY")?.amount ?? 0;

@@ -315,6 +315,38 @@ class CoinNetworksIn(BaseModel):
     networks: list[str]
 
 
+class PlatformAddressIn(BaseModel):
+    symbol: str
+    network: str
+    address: str
+    warning: Optional[str] = ""
+    min_deposit: Optional[float] = 0.0
+    deposit_enabled: Optional[bool] = True
+    withdraw_enabled: Optional[bool] = True
+
+
+# Live Chat -----------------------------------------------------------
+class LiveChatStartIn(BaseModel):
+    visitor_id: Optional[str] = None
+    name: Optional[str] = None
+    contact: Optional[str] = None  # email or phone
+    page_url: Optional[str] = None
+
+
+class LiveChatMessageIn(BaseModel):
+    session_id: str
+    visitor_id: Optional[str] = None  # required when no auth
+    body: str
+
+
+class LiveChatAdminReplyIn(BaseModel):
+    body: str
+
+
+class LiveChatStatusIn(BaseModel):
+    status: str  # open | pending | closed
+
+
 DEFAULT_SETTINGS = {
     "kyc_enforced": True,
     "trading_fee": 0.001,
@@ -645,20 +677,10 @@ async def wallet_transactions(user: dict = Depends(get_current_user), limit: int
 # -------------- Deposits (IBAN) --------------
 @api.get("/deposits/bank-info")
 async def bank_info(user: dict = Depends(get_current_user)):
-    # fetch or create stable per-user reference code
-    existing = await db.bank_refs.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    if not existing:
-        ref = make_ref_code()
-        await db.bank_refs.insert_one(
-            {"user_id": user["user_id"], "reference_code": ref, "created_at": now_iso()}
-        )
-    else:
-        ref = existing["reference_code"]
     return {
         "iban": PLATFORM_IBAN,
         "bank_name": PLATFORM_BANK_NAME,
         "recipient": PLATFORM_BANK_RECIPIENT,
-        "reference_code": ref,
     }
 
 
@@ -686,18 +708,11 @@ async def create_deposit(
         except Exception as exc:
             logger.error("dekont upload failed: %s", exc)
             raise HTTPException(status_code=500, detail="Dekont yüklenemedi")
-
-    ref = await db.bank_refs.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    if not ref:
-        rc = make_ref_code()
-        await db.bank_refs.insert_one({"user_id": user["user_id"], "reference_code": rc})
-        ref = {"reference_code": rc}
     await db.deposits.insert_one(
         {
             "deposit_id": dep_id,
             "user_id": user["user_id"],
             "amount": amount,
-            "reference_code": ref["reference_code"],
             "receipt_path": receipt_path,
             "status": "pending",
             "created_at": now_iso(),
@@ -759,6 +774,24 @@ async def markets():
     berx_ticker = await berx.get_ticker(db)
     rows.insert(0, berx_ticker) if False else rows.append(berx_ticker)
     return rows
+
+
+@api.get("/markets-sparklines")
+async def markets_sparklines(limit: int = 24):
+    """Return a dict {SYMBOL: [closes]} for the markets list table."""
+    out = {}
+    try:
+        rows = await mkt.fetch_all_tickers()
+        for r in rows:
+            try:
+                pts = await mkt.fetch_sparkline(r["symbol"], limit)
+                out[r["symbol"]] = pts or []
+            except Exception:
+                out[r["symbol"]] = []
+        out["BERX"] = await berx.get_sparkline(db, limit)
+    except Exception as e:
+        logger.warning("sparklines batch failed: %s", e)
+    return out
 
 
 @api.get("/markets/{symbol}")
@@ -1108,7 +1141,7 @@ async def admin_deposit_update(deposit_id: str, payload: AdminStatusIn, request:
                 "type": "deposit",
                 "amount_try": dep["amount"],
                 "status": "approved",
-                "ref": dep["reference_code"],
+                "ref": dep.get("reference_code"),
                 "created_at": now_iso(),
             }
         )
@@ -1209,7 +1242,7 @@ async def public_networks():
 
 @api.get("/coins/{symbol}/networks")
 async def coin_network_list(symbol: str):
-    return await nw.coin_networks(db, symbol, ALL_COIN_SYMBOLS)
+    return await nw.coin_networks_full(db, symbol, ALL_COIN_SYMBOLS)
 
 
 @api.get("/wallet/deposit-address")
@@ -1221,7 +1254,7 @@ async def deposit_address(symbol: str, network: str, user: dict = Depends(get_cu
         doc = await nw.get_or_create_address(db, user["user_id"], symbol.upper(), network.upper())
         return doc
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @api.post("/crypto-withdrawals")
@@ -1280,6 +1313,102 @@ async def crypto_withdraw(data: CryptoWithdrawIn, user: dict = Depends(get_curre
 @api.get("/crypto-withdrawals")
 async def my_crypto_withdrawals(user: dict = Depends(get_current_user)):
     return await db.crypto_withdrawals.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+# Wallet-prefixed alias routes (used by new Wallet/Deposit/Withdraw UIs)
+@api.get("/wallet/crypto-withdrawals")
+async def my_crypto_withdrawals_alias(user: dict = Depends(get_current_user)):
+    return await my_crypto_withdrawals(user=user)
+
+
+@api.post("/wallet/crypto-withdrawals")
+async def wallet_crypto_withdraw(data: CryptoWithdrawIn, user: dict = Depends(get_current_user)):
+    return await crypto_withdraw(data=data, user=user)
+
+
+# Crypto deposit claims (user submits proof, admin approves)
+class CryptoDepositClaimIn(BaseModel):
+    symbol: str
+    network: str
+    tx_hash: str
+    amount: Optional[float] = None
+
+
+@api.post("/wallet/crypto-deposits")
+async def wallet_crypto_deposit(data: CryptoDepositClaimIn, request: Request, user: dict = Depends(get_current_user)):
+    sym = data.symbol.upper()
+    net_code = data.network.upper()
+    if not data.tx_hash.strip():
+        raise HTTPException(status_code=400, detail="Tx hash zorunlu")
+    nets = await nw.coin_networks(db, sym, ALL_COIN_SYMBOLS)
+    if not any(n["code"] == net_code for n in nets):
+        raise HTTPException(status_code=400, detail="Bu ağ bu coin için aktif değil")
+    plat = await nw.get_platform_address(db, sym, net_code)
+    if not plat or not plat.get("address"):
+        raise HTTPException(status_code=400, detail="Yönetici bu coin/ağ için adres tanımlamamış")
+    dep_id = new_id("cdep_")
+    doc = {
+        "deposit_id": dep_id,
+        "user_id": user["user_id"],
+        "user_email": user.get("email"),
+        "symbol": sym,
+        "network": net_code,
+        "tx_hash": data.tx_hash.strip(),
+        "amount": float(data.amount or 0),
+        "platform_address": plat["address"],
+        "status": "pending",
+        "ip_address": _client_ip(request),
+        "created_at": now_iso(),
+    }
+    await db.crypto_deposits.insert_one(doc)
+    return {"ok": True, "deposit_id": dep_id}
+
+
+@api.get("/wallet/crypto-deposits")
+async def wallet_crypto_deposits(user: dict = Depends(get_current_user)):
+    return await db.crypto_deposits.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api.get("/admin/crypto-deposits")
+async def admin_crypto_deposits(status: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {}
+    if status:
+        q["status"] = status
+    return await db.crypto_deposits.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api.patch("/admin/crypto-deposits/{deposit_id}")
+async def admin_crypto_deposit_update(deposit_id: str, payload: AdminStatusIn, request: Request, admin: dict = Depends(require_admin)):
+    dep = await db.crypto_deposits.find_one({"deposit_id": deposit_id})
+    if not dep:
+        raise HTTPException(status_code=404, detail="Bulunamadı")
+    if dep["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Talep zaten işlendi")
+    set_fields = {"status": payload.status, "admin_note": payload.note, "reviewed_at": now_iso()}
+    if payload.status == "approved":
+        amt = float(dep.get("amount") or 0)
+        if amt > 0:
+            await db.wallets.update_one(
+                {"user_id": dep["user_id"]},
+                {"$inc": {f"balances.{dep['symbol']}": amt}},
+            )
+            await db.transactions.insert_one({
+                "user_id": dep["user_id"],
+                "type": "crypto_deposit",
+                "symbol": dep["symbol"],
+                "network": dep["network"],
+                "quantity": amt,
+                "status": "approved",
+                "tx_hash": dep.get("tx_hash"),
+                "created_at": now_iso(),
+            })
+    await db.crypto_deposits.update_one({"deposit_id": deposit_id}, {"$set": set_fields})
+    user = await db.users.find_one({"user_id": dep["user_id"]})
+    if user:
+        title = f"{dep['symbol']} Yatırma {'Onaylandı' if payload.status=='approved' else 'Reddedildi'}"
+        await push_notification(user["user_id"], title, payload.note or "", "deposit")
+    await log_admin_action(admin, f"crypto_deposit.{payload.status}", "crypto_deposit", deposit_id, {"symbol": dep["symbol"], "network": dep["network"], "target_user": dep["user_id"]}, request)
+    return {"ok": True}
 
 
 @api.post("/transfers")
@@ -1391,8 +1520,45 @@ async def admin_coin_networks(symbol: str, admin: dict = Depends(require_admin))
 
 
 @api.put("/admin/coins/{symbol}/networks")
-async def admin_set_coin_networks(symbol: str, data: CoinNetworksIn, admin: dict = Depends(require_admin)):
+async def admin_set_coin_networks(symbol: str, data: CoinNetworksIn, request: Request, admin: dict = Depends(require_admin)):
     await nw.set_coin_networks(db, symbol, data.networks)
+    await log_admin_action(admin, "coin_networks.update", "coin_networks", symbol.upper(), {"networks": data.networks}, request)
+    return {"ok": True}
+
+
+# -------- Admin: platform deposit address management (per coin + network) --------
+@api.get("/admin/platform-addresses")
+async def admin_platform_addresses(admin: dict = Depends(require_admin)):
+    return await nw.list_platform_addresses(db)
+
+
+@api.put("/admin/platform-addresses")
+async def admin_platform_address_upsert(data: PlatformAddressIn, request: Request, admin: dict = Depends(require_admin)):
+    if not data.address.strip():
+        raise HTTPException(status_code=400, detail="Adres boş olamaz")
+    nets = await nw.list_networks(db)
+    if not any(n["code"] == data.network.upper() for n in nets):
+        raise HTTPException(status_code=400, detail="Network bulunamadı")
+    saved = await nw.upsert_platform_address(
+        db,
+        data.symbol,
+        data.network,
+        address=data.address,
+        warning=data.warning or "",
+        min_deposit=data.min_deposit or 0.0,
+        deposit_enabled=data.deposit_enabled if data.deposit_enabled is not None else True,
+        withdraw_enabled=data.withdraw_enabled if data.withdraw_enabled is not None else True,
+    )
+    await log_admin_action(admin, "platform_address.upsert", "platform_address", f"{data.symbol.upper()}:{data.network.upper()}", {"address": data.address[:20] + "...", "deposit_enabled": data.deposit_enabled, "withdraw_enabled": data.withdraw_enabled}, request)
+    return saved
+
+
+@api.delete("/admin/platform-addresses/{symbol}/{network}")
+async def admin_platform_address_delete(symbol: str, network: str, request: Request, admin: dict = Depends(require_admin)):
+    ok = await nw.delete_platform_address(db, symbol, network)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Kayıt yok")
+    await log_admin_action(admin, "platform_address.delete", "platform_address", f"{symbol.upper()}:{network.upper()}", {}, request)
     return {"ok": True}
 
 
@@ -1591,6 +1757,206 @@ async def admin_support_reply(message_id: str, data: SupportReplyIn, admin: dict
     return {"ok": True}
 
 
+# -------------- Live Chat (visitor + user) --------------
+async def _get_chat_user(request: Request):
+    """Try to identify an authenticated user, otherwise return None."""
+    try:
+        return await get_current_user(request)
+    except HTTPException:
+        return None
+
+
+async def _resolve_session(db_, *, session_id: str | None, visitor_id: str | None, user: dict | None):
+    """Find session by (auth user_id) or by (visitor_id + session_id) tuple."""
+    q = {"session_id": session_id} if session_id else None
+    if not q:
+        return None
+    sess = await db_.live_chat_sessions.find_one(q, {"_id": 0})
+    if not sess:
+        return None
+    if user and sess.get("user_id") == user.get("user_id"):
+        return sess
+    if visitor_id and sess.get("visitor_id") == visitor_id:
+        return sess
+    return None
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
+
+@api.post("/live-chat/start")
+async def live_chat_start(data: LiveChatStartIn, request: Request):
+    user = await _get_chat_user(request)
+    visitor_id = data.visitor_id or new_id("vis_")
+    # Reuse the most recent open session belonging to this caller
+    query = {}
+    if user:
+        query["user_id"] = user["user_id"]
+    else:
+        query["visitor_id"] = visitor_id
+    query["status"] = {"$in": ["open", "pending"]}
+    existing = await db.live_chat_sessions.find_one(query, {"_id": 0}, sort=[("created_at", -1)])
+    if existing:
+        return {"session": existing, "visitor_id": visitor_id, "user": clean_user(user) if user else None}
+
+    name = (user.get("name") if user else None) or data.name or "Ziyaretçi"
+    contact = (user.get("email") if user else None) or data.contact or ""
+    sess = {
+        "session_id": new_id("chat_"),
+        "user_id": user["user_id"] if user else None,
+        "user_email": user["email"] if user else None,
+        "visitor_id": None if user else visitor_id,
+        "name": name,
+        "contact": contact,
+        "status": "open",
+        "page_url": (data.page_url or "")[:240],
+        "ip_address": _client_ip(request),
+        "user_agent": (request.headers.get("user-agent") or "")[:240],
+        "unread_admin_count": 0,
+        "unread_user_count": 0,
+        "last_message_at": now_iso(),
+        "created_at": now_iso(),
+    }
+    await db.live_chat_sessions.insert_one(sess)
+    return {"session": {k: v for k, v in sess.items() if k != "_id"}, "visitor_id": visitor_id, "user": clean_user(user) if user else None}
+
+
+@api.post("/live-chat/message")
+async def live_chat_send(data: LiveChatMessageIn, request: Request):
+    user = await _get_chat_user(request)
+    sess = await _resolve_session(db, session_id=data.session_id, visitor_id=data.visitor_id, user=user)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Konuşma bulunamadı")
+    body = (data.body or "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Boş mesaj gönderilemez")
+    msg = {
+        "message_id": new_id("lm_"),
+        "session_id": sess["session_id"],
+        "sender": "user",
+        "sender_label": (user["email"] if user else sess.get("name")) or "Ziyaretçi",
+        "body": body[:4000],
+        "created_at": now_iso(),
+        "read_by_admin": False,
+    }
+    await db.live_chat_messages.insert_one(msg)
+    await db.live_chat_sessions.update_one(
+        {"session_id": sess["session_id"]},
+        {"$set": {"last_message_at": now_iso(), "status": "pending"}, "$inc": {"unread_admin_count": 1}},
+    )
+    return {"ok": True, "message": {k: v for k, v in msg.items() if k != "_id"}}
+
+
+@api.get("/live-chat/poll")
+async def live_chat_poll(session_id: str, request: Request, visitor_id: Optional[str] = None, since: Optional[str] = None):
+    user = await _get_chat_user(request)
+    sess = await _resolve_session(db, session_id=session_id, visitor_id=visitor_id, user=user)
+    if not sess:
+        raise HTTPException(status_code=404, detail="Konuşma bulunamadı")
+    q = {"session_id": session_id}
+    if since:
+        q["created_at"] = {"$gt": since}
+    msgs = await db.live_chat_messages.find(q, {"_id": 0}).sort("created_at", 1).to_list(500)
+    # mark admin->user messages as read by user
+    if msgs:
+        await db.live_chat_messages.update_many(
+            {"session_id": session_id, "sender": "admin", "read_by_user": {"$ne": True}},
+            {"$set": {"read_by_user": True}},
+        )
+        await db.live_chat_sessions.update_one(
+            {"session_id": session_id}, {"$set": {"unread_user_count": 0}}
+        )
+    sess_fresh = await db.live_chat_sessions.find_one({"session_id": session_id}, {"_id": 0})
+    return {"session": sess_fresh, "messages": msgs}
+
+
+@api.get("/admin/live-chat/sessions")
+async def admin_live_chat_sessions(status: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {}
+    if status:
+        q["status"] = status
+    rows = await db.live_chat_sessions.find(q, {"_id": 0}).sort("last_message_at", -1).to_list(500)
+    return rows
+
+
+@api.get("/admin/live-chat/sessions/{session_id}")
+async def admin_live_chat_session(session_id: str, admin: dict = Depends(require_admin)):
+    sess = await db.live_chat_sessions.find_one({"session_id": session_id}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Konuşma bulunamadı")
+    msgs = await db.live_chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(1000)
+    # Admin opened the chat -> mark user messages as read
+    await db.live_chat_messages.update_many(
+        {"session_id": session_id, "sender": "user", "read_by_admin": {"$ne": True}},
+        {"$set": {"read_by_admin": True}},
+    )
+    await db.live_chat_sessions.update_one(
+        {"session_id": session_id}, {"$set": {"unread_admin_count": 0}}
+    )
+    return {"session": sess, "messages": msgs}
+
+
+@api.post("/admin/live-chat/sessions/{session_id}/reply")
+async def admin_live_chat_reply(session_id: str, data: LiveChatAdminReplyIn, request: Request, admin: dict = Depends(require_admin)):
+    sess = await db.live_chat_sessions.find_one({"session_id": session_id})
+    if not sess:
+        raise HTTPException(status_code=404, detail="Konuşma bulunamadı")
+    body = (data.body or "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Boş yanıt")
+    msg = {
+        "message_id": new_id("lm_"),
+        "session_id": session_id,
+        "sender": "admin",
+        "sender_label": admin.get("email", "Coinberx Destek"),
+        "body": body[:4000],
+        "created_at": now_iso(),
+        "read_by_user": False,
+    }
+    await db.live_chat_messages.insert_one(msg)
+    await db.live_chat_sessions.update_one(
+        {"session_id": session_id},
+        {"$set": {"last_message_at": now_iso(), "status": "open"}, "$inc": {"unread_user_count": 1}},
+    )
+    # also push a notification when associated with a logged-in user
+    if sess.get("user_id"):
+        await push_notification(sess["user_id"], "Destek Yanıtı", body[:120], "support")
+    await log_admin_action(admin, "live_chat.reply", "live_chat", session_id, {"body_len": len(body)}, request)
+    return {"ok": True, "message": {k: v for k, v in msg.items() if k != "_id"}}
+
+
+@api.patch("/admin/live-chat/sessions/{session_id}/status")
+async def admin_live_chat_status(session_id: str, data: LiveChatStatusIn, request: Request, admin: dict = Depends(require_admin)):
+    if data.status not in {"open", "pending", "closed"}:
+        raise HTTPException(status_code=400, detail="Geçersiz durum")
+    await db.live_chat_sessions.update_one(
+        {"session_id": session_id}, {"$set": {"status": data.status, "last_message_at": now_iso()}}
+    )
+    await log_admin_action(admin, f"live_chat.{data.status}", "live_chat", session_id, {}, request)
+    return {"ok": True}
+
+
+@api.get("/admin/live-chat/stats")
+async def admin_live_chat_stats(admin: dict = Depends(require_admin)):
+    open_n = await db.live_chat_sessions.count_documents({"status": "open"})
+    pending_n = await db.live_chat_sessions.count_documents({"status": "pending"})
+    closed_n = await db.live_chat_sessions.count_documents({"status": "closed"})
+    day_ago = (now_dt() - timedelta(hours=24)).isoformat()
+    today = await db.live_chat_messages.count_documents({"created_at": {"$gte": day_ago}})
+    recent_msgs = await db.live_chat_messages.find({}, {"_id": 0}).sort("created_at", -1).limit(8).to_list(8)
+    return {
+        "open": open_n,
+        "pending": pending_n,
+        "closed": closed_n,
+        "messages_24h": today,
+        "recent": recent_msgs,
+    }
+
+
 # -------------- Public --------------
 @api.get("/settings")
 async def public_settings():
@@ -1676,6 +2042,11 @@ async def on_startup():
     await db.internal_transfers.create_index([("receiver_id", 1), ("created_at", -1)])
     await db.deposit_addresses.create_index([("user_id", 1), ("symbol", 1), ("network", 1)], unique=True)
     await db.admin_activity_logs.create_index([("created_at", -1)])
+    await db.live_chat_sessions.create_index([("status", 1), ("last_message_at", -1)])
+    await db.live_chat_sessions.create_index("session_id", unique=True)
+    await db.live_chat_sessions.create_index("visitor_id")
+    await db.live_chat_messages.create_index([("session_id", 1), ("created_at", 1)])
+    await db.platform_addresses.create_index([("symbol", 1), ("network", 1)], unique=True)
     init_storage()
     await berx.seed_berx(db)
     await nw.seed_networks(db)
