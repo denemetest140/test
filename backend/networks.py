@@ -4,7 +4,19 @@ Architecture is designed to be production-ready: actual blockchain nodes
 would plug into deposit/withdraw broadcasting later.
 Deposit addresses are admin-managed (no fake auto-generation).
 """
+from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+
+@dataclass
+class PlatformAddressPayload:
+    """Grouped payload for upserting an admin-managed deposit address."""
+    address: str
+    warning: str = ""
+    min_deposit: float = 0.0
+    deposit_enabled: bool = True
+    withdraw_enabled: bool = True
 
 
 DEFAULT_NETWORKS = [
@@ -90,22 +102,29 @@ async def list_platform_addresses(db) -> list[dict]:
     return await db.platform_addresses.find({}, {"_id": 0}).sort("symbol", 1).to_list(500)
 
 
-async def upsert_platform_address(db, symbol: str, network_code: str, *, address: str, warning: str = "", min_deposit: float = 0.0, deposit_enabled: bool = True, withdraw_enabled: bool = True) -> dict:
+async def upsert_platform_address(
+    db: Any,
+    symbol: str,
+    network_code: str,
+    payload: PlatformAddressPayload,
+) -> Optional[Dict[str, Any]]:
+    """Insert or update an admin-configured deposit address (per coin + network)."""
     symbol = symbol.upper()
     network_code = network_code.upper()
+    now_iso = datetime.now(timezone.utc).isoformat()
     doc = {
         "symbol": symbol,
         "network": network_code,
-        "address": (address or "").strip(),
-        "warning": warning or "",
-        "min_deposit": float(min_deposit or 0.0),
-        "deposit_enabled": bool(deposit_enabled),
-        "withdraw_enabled": bool(withdraw_enabled),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "address": (payload.address or "").strip(),
+        "warning": payload.warning or "",
+        "min_deposit": float(payload.min_deposit or 0.0),
+        "deposit_enabled": bool(payload.deposit_enabled),
+        "withdraw_enabled": bool(payload.withdraw_enabled),
+        "updated_at": now_iso,
     }
     await db.platform_addresses.update_one(
         {"symbol": symbol, "network": network_code},
-        {"$set": doc, "$setOnInsert": {"created_at": doc["updated_at"]}},
+        {"$set": doc, "$setOnInsert": {"created_at": now_iso}},
         upsert=True,
     )
     return await get_platform_address(db, symbol, network_code)

@@ -93,7 +93,12 @@ def new_id(prefix: str = "") -> str:
 
 
 def make_ref_code() -> str:
-    return "CB" + "".join(random.choices(string.digits, k=8))
+    return "CB" + "".join(secrets.choice(string.digits) for _ in range(8))
+
+
+def make_verification_code() -> str:
+    """Cryptographically-secure 6-digit verification code."""
+    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
 def create_access_token(user_id: str, email: str) -> str:
@@ -122,38 +127,53 @@ def clean_user(u: dict) -> dict:
     }
 
 
-async def get_current_user(request: Request) -> dict:
+def _extract_bearer_token(request: Request) -> Optional[str]:
+    """Pull access token from cookie or Authorization header."""
     token = request.cookies.get("access_token")
     if not token:
         auth_h = request.headers.get("Authorization", "")
         if auth_h.startswith("Bearer "):
             token = auth_h[7:]
+    return token
 
-    # Google session token fallback (opaque) - look up in sessions
+
+async def _user_from_jwt(token: str) -> Optional[dict]:
+    """Decode JWT and return matching user or None."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+    except jwt.PyJWTError:
+        return None
+    if payload.get("type") != "access":
+        return None
+    return await db.users.find_one({"user_id": payload["sub"]}, {"_id": 0})
+
+
+async def _user_from_session(token: str) -> Optional[dict]:
+    """Resolve an opaque session token (e.g. Google login) into a live user."""
+    session = await db.sessions.find_one({"session_token": token}, {"_id": 0})
+    if not session:
+        return None
+    expires = session.get("expires_at")
+    if isinstance(expires, str):
+        expires = datetime.fromisoformat(expires)
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if not expires or expires < now_dt():
+        return None
+    return await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+
+
+async def get_current_user(request: Request) -> dict:
+    token = _extract_bearer_token(request)
     if token:
-        try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
-            if payload.get("type") == "access":
-                user = await db.users.find_one({"user_id": payload["sub"]}, {"_id": 0})
-                if user:
-                    return user
-        except jwt.PyJWTError:
-            pass
-
-    # Try as opaque google session token
+        user = await _user_from_jwt(token)
+        if user:
+            return user
     session_token = request.cookies.get("session_token") or token
     if session_token:
-        session = await db.sessions.find_one({"session_token": session_token}, {"_id": 0})
-        if session:
-            expires = session.get("expires_at")
-            if isinstance(expires, str):
-                expires = datetime.fromisoformat(expires)
-            if expires and expires.tzinfo is None:
-                expires = expires.replace(tzinfo=timezone.utc)
-            if expires and expires >= now_dt():
-                user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
-                if user:
-                    return user
+        user = await _user_from_session(session_token)
+        if user:
+            return user
     raise HTTPException(status_code=401, detail="Kimlik doğrulama gerekli")
 
 
@@ -409,7 +429,7 @@ async def register(data: RegisterIn, response: Response):
     if existing:
         raise HTTPException(status_code=400, detail="Bu e-posta ile zaten bir hesap var")
     user_id = new_id("usr_")
-    code = "".join(random.choices(string.digits, k=6))
+    code = make_verification_code()
     referral_code = "CB" + secrets.token_hex(3).upper()
     doc = {
         "user_id": user_id,
@@ -517,7 +537,7 @@ async def resend_code(data: ResendCodeIn):
     user = await db.users.find_one({"email": data.email.lower()})
     if not user:
         raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
-    code = "".join(random.choices(string.digits, k=6))
+    code = make_verification_code()
     await db.users.update_one(
         {"user_id": user["user_id"]},
         {"$set": {"verification_code": code, "verification_expiry": (now_dt() + timedelta(minutes=30)).isoformat()}},
@@ -617,11 +637,13 @@ async def file_proxy(path: str, auth: Optional[str] = Query(None), request: Requ
         f"{APP_NAME}/dekont/{user_id}/"
     ) and user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Yetkisiz dosya")
+    content: bytes = b""
+    ctype: str = "application/octet-stream"
     try:
         content, ctype = get_object(path)
     except Exception:
         raise HTTPException(status_code=404, detail="Dosya bulunamadı")
-    return FastAPIResponse(content=content, media_type=ctype)
+    return FastAPIResponse(content=content, media_type=ctype or "application/octet-stream")
 
 
 # -------------- Wallet --------------
@@ -871,8 +893,8 @@ async def user_tier(user: dict = Depends(get_current_user)):
     return await compute_user_tier(user["user_id"])
 
 
-@api.post("/trade/order")
-async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
+def _validate_order_input(data: OrderIn, settings: dict, user: dict) -> str:
+    """Return the normalised symbol after validating coin / side / type / KYC."""
     symbol = data.symbol.upper()
     if symbol != "BERX" and symbol not in mkt.COIN_META:
         raise HTTPException(status_code=400, detail="Desteklenmeyen coin")
@@ -880,15 +902,13 @@ async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Yön hatalı")
     if data.order_type not in {"market", "limit"}:
         raise HTTPException(status_code=400, detail="Emir tipi hatalı")
-    settings = await get_settings()
     if settings.get("kyc_enforced") and user.get("kyc_status") != "approved":
         raise HTTPException(status_code=403, detail="İşlem için KYC onayı gerekli")
+    return symbol
 
-    ticker = await mkt.fetch_ticker(symbol)
-    market_price = ticker["price_try"] if ticker else 0
-    price = data.price or market_price
 
-    # Compute quantity / amount
+def _compute_qty_and_amount(data: OrderIn, market_price: float) -> tuple[float, float]:
+    """Resolve final (quantity, amount_try) given input and market price."""
     if data.side == "buy":
         if data.order_type == "market":
             amount = data.amount_try or (data.quantity * market_price if data.quantity else 0)
@@ -905,7 +925,94 @@ async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=400, detail="Adet gerekli")
         qty = data.quantity
         amount = qty * (data.price if data.order_type == "limit" else market_price)
+    return qty, amount
 
+
+async def _execute_market_order(
+    *,
+    user_id: str,
+    symbol: str,
+    side: str,
+    qty: float,
+    amount: float,
+    market_price: float,
+    wallet: dict,
+    order_id: str,
+) -> float:
+    """Execute a market buy/sell against wallet balances. Returns fee paid in TRY."""
+    tier_info = await compute_user_tier(user_id)
+    effective_fee_rate = TRADING_FEE * (1 - tier_info["tier"]["fee_discount"])
+    fee = amount * effective_fee_rate
+    if side == "buy":
+        required = amount + fee
+        if wallet["balances"].get("TRY", 0) < required:
+            raise HTTPException(status_code=400, detail="Yetersiz TL bakiye")
+        await db.wallets.update_one(
+            {"user_id": user_id},
+            {"$inc": {"balances.TRY": -required, f"balances.{symbol}": qty}},
+        )
+        await db.cost_basis.update_one(
+            {"user_id": user_id}, {"$inc": {"invested_try": required}}, upsert=True
+        )
+    else:
+        if wallet["balances"].get(symbol, 0) < qty:
+            raise HTTPException(status_code=400, detail=f"Yetersiz {symbol} bakiye")
+        credit = amount - fee
+        await db.wallets.update_one(
+            {"user_id": user_id},
+            {"$inc": {f"balances.{symbol}": -qty, "balances.TRY": credit}},
+        )
+        await db.cost_basis.update_one(
+            {"user_id": user_id}, {"$inc": {"invested_try": -credit}}, upsert=True
+        )
+    await db.transactions.insert_one(
+        {
+            "user_id": user_id,
+            "type": "trade",
+            "side": side,
+            "symbol": symbol,
+            "quantity": qty,
+            "price": market_price,
+            "amount_try": amount,
+            "fee_try": fee,
+            "order_id": order_id,
+            "created_at": now_iso(),
+        }
+    )
+    return fee
+
+
+async def _lock_funds_for_limit(
+    *, user_id: str, symbol: str, side: str, qty: float, amount: float, wallet: dict
+) -> None:
+    """Lock TRY (buy) or coin (sell) for an open limit order."""
+    if side == "buy":
+        required = amount + amount * TRADING_FEE
+        if wallet["balances"].get("TRY", 0) < required:
+            raise HTTPException(status_code=400, detail="Yetersiz TL bakiye")
+        await db.wallets.update_one(
+            {"user_id": user_id},
+            {"$inc": {"balances.TRY": -required, "locked.TRY": required}},
+        )
+    else:
+        if wallet["balances"].get(symbol, 0) < qty:
+            raise HTTPException(status_code=400, detail=f"Yetersiz {symbol} bakiye")
+        await db.wallets.update_one(
+            {"user_id": user_id},
+            {"$inc": {f"balances.{symbol}": -qty, f"locked.{symbol}": qty}},
+        )
+
+
+@api.post("/trade/order")
+async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
+    settings = await get_settings()
+    symbol = _validate_order_input(data, settings, user)
+
+    ticker = await mkt.fetch_ticker(symbol)
+    market_price = ticker["price_try"] if ticker else 0
+    price = data.price or market_price
+
+    qty, amount = _compute_qty_and_amount(data, market_price)
     wallet = await db.wallets.find_one({"user_id": user["user_id"]})
 
     order_id = new_id("ord_")
@@ -925,68 +1032,31 @@ async def create_order(data: OrderIn, user: dict = Depends(get_current_user)):
     }
 
     if data.order_type == "market":
-        # execute immediately against market price
-        tier_info = await compute_user_tier(user["user_id"])
-        effective_fee_rate = TRADING_FEE * (1 - tier_info["tier"]["fee_discount"])
-        fee = amount * effective_fee_rate
-        if data.side == "buy":
-            required = amount + fee
-            if wallet["balances"].get("TRY", 0) < required:
-                raise HTTPException(status_code=400, detail="Yetersiz TL bakiye")
-            await db.wallets.update_one(
-                {"user_id": user["user_id"]},
-                {"$inc": {"balances.TRY": -required, f"balances.{symbol}": qty}},
-            )
-            await db.cost_basis.update_one(
-                {"user_id": user["user_id"]},
-                {"$inc": {"invested_try": required}},
-                upsert=True,
-            )
-        else:
-            if wallet["balances"].get(symbol, 0) < qty:
-                raise HTTPException(status_code=400, detail=f"Yetersiz {symbol} bakiye")
-            credit = amount - fee
-            await db.wallets.update_one(
-                {"user_id": user["user_id"]},
-                {"$inc": {f"balances.{symbol}": -qty, "balances.TRY": credit}},
-            )
-            await db.cost_basis.update_one(
-                {"user_id": user["user_id"]},
-                {"$inc": {"invested_try": -credit}},
-                upsert=True,
-            )
-        order_doc.update({"status": "filled", "filled_qty": qty, "filled_at": now_iso()})
-        await db.transactions.insert_one(
-            {
-                "user_id": user["user_id"],
-                "type": "trade",
-                "side": data.side,
-                "symbol": symbol,
-                "quantity": qty,
-                "price": market_price,
-                "amount_try": amount,
-                "fee_try": fee,
-                "order_id": order_id,
-                "created_at": now_iso(),
-            }
+        fee = await _execute_market_order(
+            user_id=user["user_id"],
+            symbol=symbol,
+            side=data.side,
+            qty=qty,
+            amount=amount,
+            market_price=market_price,
+            wallet=wallet,
+            order_id=order_id,
         )
+        order_doc.update({
+            "status": "filled",
+            "filled_qty": qty,
+            "filled_at": now_iso(),
+            "fee_try": fee,
+        })
     else:
-        # limit order: lock funds
-        if data.side == "buy":
-            required = amount + amount * TRADING_FEE
-            if wallet["balances"].get("TRY", 0) < required:
-                raise HTTPException(status_code=400, detail="Yetersiz TL bakiye")
-            await db.wallets.update_one(
-                {"user_id": user["user_id"]},
-                {"$inc": {"balances.TRY": -required, "locked.TRY": required}},
-            )
-        else:
-            if wallet["balances"].get(symbol, 0) < qty:
-                raise HTTPException(status_code=400, detail=f"Yetersiz {symbol} bakiye")
-            await db.wallets.update_one(
-                {"user_id": user["user_id"]},
-                {"$inc": {f"balances.{symbol}": -qty, f"locked.{symbol}": qty}},
-            )
+        await _lock_funds_for_limit(
+            user_id=user["user_id"],
+            symbol=symbol,
+            side=data.side,
+            qty=qty,
+            amount=amount,
+            wallet=wallet,
+        )
         order_doc["status"] = "open"
 
     await db.orders.insert_one(order_doc)
@@ -1257,37 +1327,51 @@ async def deposit_address(symbol: str, network: str, user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail=str(e))
 
 
+async def _resolve_withdrawal_network(symbol: str, network_code: str) -> dict:
+    """Return the matching enabled network row or raise 400."""
+    nets = await nw.coin_networks(db, symbol, ALL_COIN_SYMBOLS)
+    net = next((n for n in nets if n["code"] == network_code), None)
+    if not net:
+        raise HTTPException(status_code=400, detail="Bu ağ bu coin için aktif değil")
+    return net
+
+
+async def _coin_price_try(symbol: str) -> float:
+    """Current TRY-denominated unit price for `symbol`."""
+    if symbol == "BERX":
+        return await berx.get_berx_price(db)
+    t = await mkt.fetch_ticker(symbol)
+    return t["price_try"] if t else 0
+
+
 @api.post("/crypto-withdrawals")
 async def crypto_withdraw(data: CryptoWithdrawIn, user: dict = Depends(get_current_user)):
     sym = data.symbol.upper()
     net_code = data.network.upper()
     if sym == "TRY":
         raise HTTPException(status_code=400, detail="TRY için /withdrawals kullanın")
+    if data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Geçersiz tutar")
+
     settings = await get_settings()
     if settings.get("kyc_enforced") and user.get("kyc_status") != "approved":
         raise HTTPException(status_code=403, detail="Çekim için KYC onayı gerekli")
-    nets = await nw.coin_networks(db, sym, ALL_COIN_SYMBOLS)
-    net = next((n for n in nets if n["code"] == net_code), None)
-    if not net:
-        raise HTTPException(status_code=400, detail="Bu ağ bu coin için aktif değil")
-    if data.amount <= 0:
-        raise HTTPException(status_code=400, detail="Geçersiz tutar")
-    # compute coin-equivalent of fee (fee is in TRY, convert using current price)
-    if sym == "BERX":
-        price = await berx.get_berx_price(db)
-    else:
-        t = await mkt.fetch_ticker(sym)
-        price = t["price_try"] if t else 0
+
+    net = await _resolve_withdrawal_network(sym, net_code)
+    price = await _coin_price_try(sym)
     if price <= 0:
         raise HTTPException(status_code=400, detail="Fiyat alınamadı")
+
     fee_coin = net["fee_flat_try"] / price
     min_coin = net["min_withdraw_try"] / price
     if data.amount < min_coin:
         raise HTTPException(status_code=400, detail=f"Min çekim: {min_coin:.8f} {sym}")
+
     total_need = data.amount + fee_coin
     w = await db.wallets.find_one({"user_id": user["user_id"]})
     if not w or (w["balances"].get(sym, 0) < total_need):
         raise HTTPException(status_code=400, detail=f"Yetersiz {sym} bakiyesi (ücret dahil)")
+
     await db.wallets.update_one(
         {"user_id": user["user_id"]},
         {"$inc": {f"balances.{sym}": -total_need, f"locked.{sym}": data.amount}},
@@ -1411,6 +1495,19 @@ async def admin_crypto_deposit_update(deposit_id: str, payload: AdminStatusIn, r
     return {"ok": True}
 
 
+async def _lookup_user_by_handle(handle: str) -> Optional[dict]:
+    """Find a user by email / user_id / referral_code / exact name match."""
+    return await db.users.find_one(
+        {"$or": [
+            {"email": handle.lower()},
+            {"user_id": handle},
+            {"referral_code": handle.upper()},
+            {"name": {"$regex": f"^{handle}$", "$options": "i"}},
+        ]},
+        {"_id": 0, "password_hash": 0},
+    )
+
+
 @api.post("/transfers")
 async def create_transfer(data: TransferIn, user: dict = Depends(get_current_user)):
     sym = data.symbol.upper()
@@ -1418,29 +1515,20 @@ async def create_transfer(data: TransferIn, user: dict = Depends(get_current_use
         raise HTTPException(status_code=400, detail="Bu fonksiyon sadece kripto transferi içindir")
     if data.amount <= 0:
         raise HTTPException(status_code=400, detail="Geçersiz tutar")
-    q = data.recipient.strip().lower()
-    recipient = None
-    # lookup by email, user_id, or referral_code
-    recipient = await db.users.find_one(
-        {"$or": [
-            {"email": q},
-            {"user_id": data.recipient.strip()},
-            {"referral_code": data.recipient.strip().upper()},
-            {"name": {"$regex": f"^{data.recipient.strip()}$", "$options": "i"}},
-        ]},
-        {"_id": 0, "password_hash": 0},
-    )
+
+    recipient = await _lookup_user_by_handle(data.recipient.strip())
     if not recipient:
         raise HTTPException(status_code=404, detail="Alıcı bulunamadı")
     if recipient["user_id"] == user["user_id"]:
         raise HTTPException(status_code=400, detail="Kendinize transfer yapamazsınız")
+
     settings = await get_settings()
-    fee_pct = settings.get("transfer_fee_pct", 0.0005)
-    fee = data.amount * fee_pct
+    fee = data.amount * settings.get("transfer_fee_pct", 0.0005)
     total_need = data.amount + fee
     w = await db.wallets.find_one({"user_id": user["user_id"]})
     if not w or w["balances"].get(sym, 0) < total_need:
         raise HTTPException(status_code=400, detail=f"Yetersiz {sym} bakiyesi")
+
     await ensure_wallet(recipient["user_id"])
     await db.wallets.update_one(
         {"user_id": user["user_id"]}, {"$inc": {f"balances.{sym}": -total_need}}
@@ -1448,6 +1536,7 @@ async def create_transfer(data: TransferIn, user: dict = Depends(get_current_use
     await db.wallets.update_one(
         {"user_id": recipient["user_id"]}, {"$inc": {f"balances.{sym}": data.amount}}
     )
+
     tid = new_id("tr_")
     doc = {
         "transfer_id": tid,
@@ -1543,11 +1632,13 @@ async def admin_platform_address_upsert(data: PlatformAddressIn, request: Reques
         db,
         data.symbol,
         data.network,
-        address=data.address,
-        warning=data.warning or "",
-        min_deposit=data.min_deposit or 0.0,
-        deposit_enabled=data.deposit_enabled if data.deposit_enabled is not None else True,
-        withdraw_enabled=data.withdraw_enabled if data.withdraw_enabled is not None else True,
+        nw.PlatformAddressPayload(
+            address=data.address,
+            warning=data.warning or "",
+            min_deposit=data.min_deposit or 0.0,
+            deposit_enabled=data.deposit_enabled if data.deposit_enabled is not None else True,
+            withdraw_enabled=data.withdraw_enabled if data.withdraw_enabled is not None else True,
+        ),
     )
     await log_admin_action(admin, "platform_address.upsert", "platform_address", f"{data.symbol.upper()}:{data.network.upper()}", {"address": data.address[:20] + "...", "deposit_enabled": data.deposit_enabled, "withdraw_enabled": data.withdraw_enabled}, request)
     return saved
@@ -1639,6 +1730,7 @@ async def admin_berx(admin: dict = Depends(require_admin)):
 
 @api.post("/admin/berx/price")
 async def admin_berx_price(data: BerxAdjustIn, request: Request, admin: dict = Depends(require_admin)):
+    new_price: float = 0.0
     if data.action == "set":
         new_price = await berx.set_price(db, data.value)
     elif data.action == "adjust":
@@ -1788,24 +1880,22 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
-@api.post("/live-chat/start")
-async def live_chat_start(data: LiveChatStartIn, request: Request):
-    user = await _get_chat_user(request)
-    visitor_id = data.visitor_id or new_id("vis_")
-    # Reuse the most recent open session belonging to this caller
-    query = {}
+async def _find_existing_chat_session(user: Optional[dict], visitor_id: str) -> Optional[dict]:
+    """Return the most recent open/pending session for this caller, or None."""
+    query: dict = {"status": {"$in": ["open", "pending"]}}
     if user:
         query["user_id"] = user["user_id"]
     else:
         query["visitor_id"] = visitor_id
-    query["status"] = {"$in": ["open", "pending"]}
-    existing = await db.live_chat_sessions.find_one(query, {"_id": 0}, sort=[("created_at", -1)])
-    if existing:
-        return {"session": existing, "visitor_id": visitor_id, "user": clean_user(user) if user else None}
+    return await db.live_chat_sessions.find_one(query, {"_id": 0}, sort=[("created_at", -1)])
 
+
+def _build_new_chat_session(
+    *, user: Optional[dict], visitor_id: str, data: LiveChatStartIn, request: Request
+) -> dict:
     name = (user.get("name") if user else None) or data.name or "Ziyaretçi"
     contact = (user.get("email") if user else None) or data.contact or ""
-    sess = {
+    return {
         "session_id": new_id("chat_"),
         "user_id": user["user_id"] if user else None,
         "user_email": user["email"] if user else None,
@@ -1821,8 +1911,24 @@ async def live_chat_start(data: LiveChatStartIn, request: Request):
         "last_message_at": now_iso(),
         "created_at": now_iso(),
     }
+
+
+@api.post("/live-chat/start")
+async def live_chat_start(data: LiveChatStartIn, request: Request):
+    user = await _get_chat_user(request)
+    visitor_id = data.visitor_id or new_id("vis_")
+
+    existing = await _find_existing_chat_session(user, visitor_id)
+    if existing:
+        return {"session": existing, "visitor_id": visitor_id, "user": clean_user(user) if user else None}
+
+    sess = _build_new_chat_session(user=user, visitor_id=visitor_id, data=data, request=request)
     await db.live_chat_sessions.insert_one(sess)
-    return {"session": {k: v for k, v in sess.items() if k != "_id"}, "visitor_id": visitor_id, "user": clean_user(user) if user else None}
+    return {
+        "session": {k: v for k, v in sess.items() if k != "_id"},
+        "visitor_id": visitor_id,
+        "user": clean_user(user) if user else None,
+    }
 
 
 @api.post("/live-chat/message")

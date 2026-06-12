@@ -87,22 +87,55 @@ async def _fetch(url: str, params: dict | None = None):
         return resp.json()
 
 
+def _binance_symbols_param(coins: list[dict]) -> str:
+    """Build the JSON array string Binance expects for batch ticker calls."""
+    symbols = [f"{c['symbol']}USDT" for c in coins if c["symbol"] != "USDT"]
+    return '[' + ','.join(f'"{s}"' for s in symbols) + ']'
+
+
+def _assemble_ticker_row(coin: dict, raw: dict | None, try_ticker: dict, usdt_try_price: float) -> dict | None:
+    """Convert a raw Binance row into a Coinberx ticker dict (in TRY)."""
+    sym = coin["symbol"]
+    if sym == "USDT":
+        price_usdt = 1.0
+        change = float(try_ticker.get("priceChangePercent", 0))
+        volume = float(try_ticker.get("quoteVolume", 0))
+        high = float(try_ticker.get("highPrice", 0))
+        low = float(try_ticker.get("lowPrice", 0))
+    else:
+        if not raw:
+            return None
+        price_usdt = float(raw["lastPrice"])
+        change = float(raw["priceChangePercent"])
+        volume = float(raw["quoteVolume"])
+        high = float(raw["highPrice"])
+        low = float(raw["lowPrice"])
+
+    scale = 1.0 if sym == "USDT" else usdt_try_price
+    price_try = usdt_try_price if sym == "USDT" else price_usdt * usdt_try_price
+    return {
+        "symbol": sym,
+        "name": coin["name"],
+        "price_usdt": price_usdt,
+        "price_try": price_try,
+        "change_24h": change,
+        "volume_24h_try": volume * scale,
+        "high_24h_try": high * scale,
+        "low_24h_try": low * scale,
+    }
+
+
 async def fetch_all_tickers() -> list[dict]:
     """Returns 24h ticker data for all supported coins, including TRY price."""
     cached = _cache_get("tickers", _CACHE_TTL)
     if cached is not None:
         return cached
 
-    # Use a single batch call with symbols array
-    symbols = [f"{c['symbol']}USDT" for c in SUPPORTED_COINS if c["symbol"] != "USDT"]
-    symbols_param = '[' + ','.join(f'"{s}"' for s in symbols) + ']'
-
+    symbols_param = _binance_symbols_param(SUPPORTED_COINS)
     try:
-        # ticker/24hr accepts symbols param
         usdt_data = await _fetch(
             f"{BINANCE_BASE}/api/v3/ticker/24hr", {"symbols": symbols_param}
         )
-        # USDT/TRY for converting
         try_ticker = await _fetch(
             f"{BINANCE_BASE}/api/v3/ticker/24hr", {"symbol": "USDTTRY"}
         )
@@ -111,40 +144,14 @@ async def fetch_all_tickers() -> list[dict]:
         logger.error("Binance fetch failed: %s", exc)
         return cached or []
 
-    result = []
     by_symbol = {d["symbol"]: d for d in usdt_data}
+    result: list[dict] = []
     for coin in SUPPORTED_COINS:
-        sym = coin["symbol"]
-        if sym == "USDT":
-            price_usdt = 1.0
-            change = float(try_ticker.get("priceChangePercent", 0))
-            volume = float(try_ticker.get("quoteVolume", 0))
-            high = float(try_ticker.get("highPrice", 0))
-            low = float(try_ticker.get("lowPrice", 0))
-        else:
-            t = by_symbol.get(f"{sym}USDT")
-            if not t:
-                continue
-            price_usdt = float(t["lastPrice"])
-            change = float(t["priceChangePercent"])
-            volume = float(t["quoteVolume"])
-            high = float(t["highPrice"])
-            low = float(t["lowPrice"])
+        raw = by_symbol.get(f"{coin['symbol']}USDT")
+        row = _assemble_ticker_row(coin, raw, try_ticker, usdt_try_price)
+        if row is not None:
+            result.append(row)
 
-        price_try = price_usdt * usdt_try_price if sym != "USDT" else usdt_try_price
-        result.append(
-            {
-                "symbol": sym,
-                "name": coin["name"],
-                "price_usdt": price_usdt,
-                "price_try": price_try,
-                "change_24h": change,
-                "volume_24h_try": volume * (usdt_try_price if sym != "USDT" else 1),
-                "high_24h_try": high * (usdt_try_price if sym != "USDT" else 1),
-                "low_24h_try": low * (usdt_try_price if sym != "USDT" else 1),
-            }
-        )
-    # Cache usdt_try rate too
     _cache_set("usdt_try", usdt_try_price)
     _cache_set("tickers", result)
     return result
@@ -214,6 +221,7 @@ async def fetch_order_book(symbol: str, limit: int = 20) -> dict:
     else:
         binance_symbol = f"{symbol}USDT"
         scale = await get_usdt_try()
+    raw: dict = {"bids": [], "asks": []}
     try:
         raw = await _fetch(
             f"{BINANCE_BASE}/api/v3/depth",
@@ -242,6 +250,7 @@ async def fetch_sparkline(symbol: str, points: int = 24) -> list[float]:
     else:
         binance_symbol = f"{symbol}USDT"
         scale = await get_usdt_try()
+    raw: list = []
     try:
         raw = await _fetch(
             f"{BINANCE_BASE}/api/v3/klines",
@@ -262,6 +271,7 @@ async def fetch_recent_trades(symbol: str, limit: int = 30) -> list[dict]:
     else:
         binance_symbol = f"{symbol}USDT"
         scale = await get_usdt_try()
+    raw: list = []
     try:
         raw = await _fetch(
             f"{BINANCE_BASE}/api/v3/trades",
