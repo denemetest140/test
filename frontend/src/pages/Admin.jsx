@@ -183,7 +183,7 @@ export default function Admin() {
 
 function SettingsPanel({ settings, onSave }) {
   const [local, setLocal] = useState(settings);
-  useEffect(() => setLocal(settings), [settings]);
+  useEffect(() => { setLocal(settings); }, [settings]);
   const upd = (k, v) => setLocal({ ...local, [k]: v });
   return (
     <div className="card-surface p-6 max-w-2xl">
@@ -333,7 +333,7 @@ function BerxPanel() {
 
 function SimRow({ sim, saveSim }) {
   const [local, setLocal] = useState(sim);
-  useEffect(() => setLocal(sim), [sim]);
+  useEffect(() => { setLocal(sim); }, [sim]);
   const upd = (k, v) => setLocal({ ...local, [k]: v });
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -488,8 +488,8 @@ function SupportPanel() {
 
 function NetworksPanel() {
   const [nets, setNets] = useState([]);
-  const load = () => api.get("/admin/networks").then((r) => setNets(r.data || []));
-  useEffect(load, []);
+  const load = () => { api.get("/admin/networks").then((r) => setNets(r.data || [])).catch(() => {}); };
+  useEffect(() => { load(); }, []);
   const save = async (code, upd) => { try { await api.patch(`/admin/networks/${code}`, upd); toast.success("Ağ güncellendi"); load(); } catch (e) { toast.error(errToStr(e)); } };
   return (
     <div className="space-y-3">
@@ -501,7 +501,7 @@ function NetworksPanel() {
 
 function NetworkRow({ n, onSave }) {
   const [local, setLocal] = useState(n);
-  useEffect(() => setLocal(n), [n]);
+  useEffect(() => { setLocal(n); }, [n]);
   return (
     <div className="card-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -569,7 +569,7 @@ function CryptoWithdrawalsPanel() {
     api.get("/admin/crypto-withdrawals").then((r) => setRows(r.data || []));
     api.get("/admin/users").then((r) => setUsers(r.data || []));
   };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   const act = async (id, status) => { try { await api.patch(`/admin/crypto-withdrawals/${id}`, { status, note: "" }); toast.success("İşlendi"); load(); } catch (e) { toast.error(errToStr(e)); } };
   return (
     <div className="card-surface overflow-x-auto">

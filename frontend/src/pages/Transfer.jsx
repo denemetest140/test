@@ -21,7 +21,7 @@ export default function Transfer() {
     api.get("/transfers").then((r) => setHist(r.data)).catch(() => {});
     api.get("/settings").then((r) => setSettings(r.data)).catch(() => {});
   };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
   useEffect(() => {
     if (!recipient || recipient.length < 3) { setLookup(null); return; }

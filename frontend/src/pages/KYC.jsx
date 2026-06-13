@@ -10,8 +10,8 @@ export default function KYC() {
   const [files, setFiles] = useState({ id_front: null, id_back: null, selfie: null });
   const [loading, setLoading] = useState(false);
 
-  const load = () => api.get("/kyc/status").then((r) => { setStatus(r.data.status); setReq(r.data.request); });
-  useEffect(load, []);
+  const load = () => { api.get("/kyc/status").then((r) => { setStatus(r.data.status); setReq(r.data.request); }).catch(() => {}); };
+  useEffect(() => { load(); }, []);
 
   const submit = async (e) => {
     e.preventDefault();

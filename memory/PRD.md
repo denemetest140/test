@@ -73,3 +73,31 @@ Coinberx, Türk yatırımcılar için açık tema, kurumsal, premium görünüml
 - Match engine: limit emirler şu an sırada bekliyor, otomatik eşleşme yok.
 - Password reset UI premium tasarımı.
 - Mobil bottom-sheet detayları.
+
+## Bug fix — Admin Networks "destroy is not a function" (2026-02-13)
+**Root cause:** `useEffect(load, [])` deseni, `load = () => api.get(...).then(...)` arrow fonksiyonu Promise döndürürken kullanılıyordu. React, effect callback'in dönüş değerini "cleanup function" olarak yorumladığı için unmount'ta `promise()` çağırıp `TypeError: destroy is not a function` fırlatıyordu. Strict Mode çift-mount'ta her sayfa girişinde hata oluşuyordu.
+
+**Düzeltme (Admin.jsx + KYC.jsx + Transfer.jsx):**
+- `useEffect(load, [])` → `useEffect(() => { load(); }, [])` (4 yer: Admin.NetworksPanel, Admin.CryptoWithdrawalsPanel, KYC, Transfer)
+- `useEffect(() => setLocal(x), [x])` → `useEffect(() => { setLocal(x); }, [x])` (3 yer, defensive)
+- `load` fonksiyonu artık `then().catch()` chain'i içeriyor; brace ile sarıldı, return undefined.
+
+**Manuel test (Playwright):**
+- Admin login → /admin → Ağlar sekmesi → KYC → Ağlar → Coin Adresleri → Ağlar. Hepsi hatasız.
+- Console temiz, `destroy is not a function` / `TypeError` yok.
+
+**Logged-in user için public landing erişimi (2026-02-13)**
+- `App.js Root()` artık her zaman Landing gösteriyor (giriş yapanı /dashboard'a zorlamıyor).
+- `Landing.jsx` `useAuth()` ile durum bilir:
+  - Sağ üst: Ziyaretçi → "Giriş Yap / Hesap Aç" · Giriş yapan → "Cüzdanım / Panele Git"
+  - Hero CTA: Ziyaretçi → "Ücretsiz Hesap Aç / Hemen Al-Sat" · Giriş yapan → "Hemen Al-Sat / Hesap Panelim"
+  - Alt CTA: Ziyaretçi → "Ücretsiz Hesap Aç" · Giriş yapan → "Hemen İşlem Yap"
+  - Nav linkleri "Spot İşlem / Kolay Al-Sat" → giriş yapana `/trade/BTC`, ziyaretçiye `/login`.
+- `/about`, `/blog`, `/career`, `/press`, `/help`, `/faq`, `/contact` zaten public (Gated değildi). Logged-in kullanıcı sorunsuz erişebiliyor.
+
+**Değişen dosyalar:**
+- `/app/frontend/src/pages/Admin.jsx`
+- `/app/frontend/src/pages/KYC.jsx`
+- `/app/frontend/src/pages/Transfer.jsx`
+- `/app/frontend/src/App.js` (Root component davranışı)
+- `/app/frontend/src/pages/Landing.jsx` (useAuth + 4 CTA bloğu koşullu)

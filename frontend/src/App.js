@@ -34,9 +34,10 @@ const Gated = ({ children }) => (
 );
 
 function Root() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-[#F7F9FC]" />;
-  return user ? <Navigate to="/dashboard" replace /> : <Landing />;
+  // Logged-in users may also browse the public landing page.
+  return <Landing />;
 }
 
 function AppRouter() {

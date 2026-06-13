@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatTRY, formatPct } from "../lib/api";
 import { CoinIcon } from "../lib/coinIcons.jsx";
+import { useAuth } from "../contexts/AuthContext";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -292,6 +293,7 @@ function BerxSpotlightCard({ sparks }) {
 
 // --- Main Landing -----------------------------------------------------------
 export default function Landing() {
+  const { user } = useAuth();
   const [coins, setCoins] = useState([]);
   const [sparks, setSparks] = useState({});
   const [query, setQuery] = useState("");
@@ -373,8 +375,8 @@ export default function Landing() {
             </Link>
             <nav className="hidden lg:flex items-center gap-6 text-sm text-[#475569]">
               <Link to="/markets" className="hover:text-[#16A34A] font-medium">Piyasalar</Link>
-              <Link to="/login" className="hover:text-[#16A34A] font-medium">Spot İşlem</Link>
-              <Link to="/login" className="hover:text-[#16A34A] font-medium">Kolay Al/Sat</Link>
+              <Link to={user ? "/trade/BTC" : "/login"} className="hover:text-[#16A34A] font-medium">Spot İşlem</Link>
+              <Link to={user ? "/trade/BTC" : "/login"} className="hover:text-[#16A34A] font-medium">Kolay Al/Sat</Link>
               <Link to="/deposit" className="hover:text-[#16A34A] font-medium">Yatır/Çek</Link>
               <a href="#security" className="hover:text-[#16A34A] font-medium">Güvenlik</a>
               <Link to="/support" className="hover:text-[#16A34A] font-medium">Destek</Link>
@@ -382,8 +384,17 @@ export default function Landing() {
             </nav>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/login" data-testid="landing-login" className="px-4 py-2 text-sm rounded-lg hover:bg-[#F1F5F9] text-[#0F172A] font-medium">Giriş Yap</Link>
-            <Link to="/register" data-testid="landing-register" className="btn-primary px-4 py-2 text-sm rounded-lg shadow-sm">Hesap Aç</Link>
+            {user ? (
+              <>
+                <Link to="/wallet" data-testid="landing-wallet" className="px-4 py-2 text-sm rounded-lg hover:bg-[#F1F5F9] text-[#0F172A] font-medium">Cüzdanım</Link>
+                <Link to="/dashboard" data-testid="landing-dashboard" className="btn-primary px-4 py-2 text-sm rounded-lg shadow-sm">Panele Git</Link>
+              </>
+            ) : (
+              <>
+                <Link to="/login" data-testid="landing-login" className="px-4 py-2 text-sm rounded-lg hover:bg-[#F1F5F9] text-[#0F172A] font-medium">Giriş Yap</Link>
+                <Link to="/register" data-testid="landing-register" className="btn-primary px-4 py-2 text-sm rounded-lg shadow-sm">Hesap Aç</Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -409,12 +420,25 @@ export default function Landing() {
               Hızlı, güvenli ve tamamen Türkçe kripto al-sat platformu. IBAN ile dakikalar içinde TL yatırın, 35+ coin ile düşük komisyonla işlem yapın.
             </p>
             <div className="flex flex-wrap gap-3 mt-8">
-              <Link to="/register" data-testid="hero-register" className="btn-primary px-6 py-3.5 rounded-lg text-sm flex items-center gap-2">
-                Ücretsiz Hesap Aç <ArrowUpRight size={14} weight="bold"/>
-              </Link>
-              <Link to="/login" data-testid="hero-trade" className="px-6 py-3.5 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm flex items-center gap-2">
-                Hemen Al-Sat <ChartLineUp size={14} weight="fill"/>
-              </Link>
+              {user ? (
+                <>
+                  <Link to="/trade/BTC" data-testid="hero-trade-now" className="btn-primary px-6 py-3.5 rounded-lg text-sm flex items-center gap-2">
+                    Hemen Al-Sat <ArrowUpRight size={14} weight="bold"/>
+                  </Link>
+                  <Link to="/dashboard" data-testid="hero-go-dashboard" className="px-6 py-3.5 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm flex items-center gap-2">
+                    Hesap Panelim <ChartLineUp size={14} weight="fill"/>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/register" data-testid="hero-register" className="btn-primary px-6 py-3.5 rounded-lg text-sm flex items-center gap-2">
+                    Ücretsiz Hesap Aç <ArrowUpRight size={14} weight="bold"/>
+                  </Link>
+                  <Link to="/login" data-testid="hero-trade" className="px-6 py-3.5 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm flex items-center gap-2">
+                    Hemen Al-Sat <ChartLineUp size={14} weight="fill"/>
+                  </Link>
+                </>
+              )}
             </div>
             <div className="flex flex-wrap gap-6 mt-10 text-sm text-[#64748B]">
               <div className="flex items-center gap-2"><CheckCircle size={16} weight="fill" className="text-[#16A34A]"/>%0,1 komisyon</div>
@@ -687,8 +711,17 @@ export default function Landing() {
             </h2>
             <p className="text-[#64748B] mt-5 max-w-xl mx-auto">30 saniyede hesap oluşturun. İlk ay IBAN yatırma ücretsiz.</p>
             <div className="flex flex-wrap gap-3 mt-8 justify-center">
-              <Link to="/register" data-testid="cta-register" className="btn-primary px-7 py-3.5 rounded-lg text-sm flex items-center gap-2">Ücretsiz Hesap Aç <ArrowUpRight size={14} weight="bold"/></Link>
-              <Link to="/markets" data-testid="cta-markets" className="px-7 py-3.5 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm">Piyasaları Keşfet</Link>
+              {user ? (
+                <>
+                  <Link to="/trade/BTC" data-testid="cta-trade" className="btn-primary px-7 py-3.5 rounded-lg text-sm flex items-center gap-2">Hemen İşlem Yap <ArrowUpRight size={14} weight="bold"/></Link>
+                  <Link to="/markets" data-testid="cta-markets" className="px-7 py-3.5 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm">Piyasaları Keşfet</Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/register" data-testid="cta-register" className="btn-primary px-7 py-3.5 rounded-lg text-sm flex items-center gap-2">Ücretsiz Hesap Aç <ArrowUpRight size={14} weight="bold"/></Link>
+                  <Link to="/markets" data-testid="cta-markets" className="px-7 py-3.5 rounded-lg border border-[#E2E8F0] hover:bg-[#FFFFFF] text-sm">Piyasaları Keşfet</Link>
+                </>
+              )}
             </div>
           </div>
         </div>
