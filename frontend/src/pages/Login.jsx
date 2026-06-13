@@ -51,8 +51,9 @@ export default function Login() {
           <button disabled={loading} className="btn-primary w-full py-3 rounded-lg" data-testid="login-submit">
             {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
           </button>
-          <div className="text-xs text-[#64748B] mt-5 text-center">
-            Hesabınız yok mu? <Link to="/register" className="text-[#16A34A]" data-testid="login-to-register">Kayıt olun</Link>
+          <div className="flex justify-between text-xs text-[#64748B] mt-3">
+            <Link to="/forgot-password" className="text-[#16A34A]" data-testid="login-forgot">Şifremi unuttum</Link>
+            <Link to="/register" className="text-[#16A34A]" data-testid="login-to-register">Kayıt ol</Link>
           </div>
         </form>
       </div>

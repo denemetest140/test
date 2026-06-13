@@ -275,10 +275,55 @@ class AdminStatusIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
+    # Trading
     kyc_enforced: Optional[bool] = None
     trading_fee: Optional[float] = None
     min_deposit_try: Optional[float] = None
     min_withdrawal_try: Optional[float] = None
+    # Auth toggles
+    kyc_enabled: Optional[bool] = None
+    email_verification_enabled: Optional[bool] = None
+    email_verification_required: Optional[bool] = None
+    google_login_enabled: Optional[bool] = None
+    forgot_password_enabled: Optional[bool] = None
+    registration_enabled: Optional[bool] = None
+    # Brand
+    site_name: Optional[str] = None
+    site_slogan: Optional[str] = None
+    site_description: Optional[str] = None
+    logo_url: Optional[str] = None
+    favicon_url: Optional[str] = None
+    footer_text: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    social_twitter: Optional[str] = None
+    social_telegram: Optional[str] = None
+    social_instagram: Optional[str] = None
+    social_youtube: Optional[str] = None
+    maintenance_mode: Optional[bool] = None
+    live_chat_enabled: Optional[bool] = None
+    # Theme
+    theme_primary: Optional[str] = None
+    theme_secondary: Optional[str] = None
+    theme_accent: Optional[str] = None
+    theme_berx: Optional[str] = None
+    theme_background: Optional[str] = None
+    theme_card: Optional[str] = None
+    theme_text: Optional[str] = None
+    theme_button_radius: Optional[str] = None
+    theme_card_radius: Optional[str] = None
+    # SEO
+    seo_title: Optional[str] = None
+    seo_description: Optional[str] = None
+    seo_keywords: Optional[str] = None
+    og_image: Optional[str] = None
+    twitter_image: Optional[str] = None
+    canonical_url: Optional[str] = None
+    robots_index: Optional[bool] = None
+    pwa_theme_color: Optional[str] = None
+    pwa_background_color: Optional[str] = None
+    # Price mode
+    price_mode: Optional[str] = None
 
 
 class BerxAdjustIn(BaseModel):
@@ -343,6 +388,10 @@ class PlatformAddressIn(BaseModel):
     min_deposit: Optional[float] = 0.0
     deposit_enabled: Optional[bool] = True
     withdraw_enabled: Optional[bool] = True
+    contract_address: Optional[str] = ""
+    explorer_url: Optional[str] = ""
+    memo_required: Optional[bool] = False
+    memo_label: Optional[str] = ""
 
 
 # Live Chat -----------------------------------------------------------
@@ -368,11 +417,73 @@ class LiveChatStatusIn(BaseModel):
 
 
 DEFAULT_SETTINGS = {
+    # Trading / wallet
     "kyc_enforced": True,
     "trading_fee": 0.001,
     "min_deposit_try": 50.0,
     "min_withdrawal_try": 100.0,
     "transfer_fee_pct": 0.0005,
+    # Auth toggles
+    "kyc_enabled": True,
+    "email_verification_enabled": True,
+    "email_verification_required": False,
+    "google_login_enabled": False,
+    "forgot_password_enabled": True,
+    "registration_enabled": True,
+    # Brand / site identity
+    "site_name": "Coinberx",
+    "site_slogan": "Türkiye'nin premium kripto borsası",
+    "site_description": "Coinberx ile TRY ve USDT paritelerinde güvenli, hızlı ve modern kripto para alım satım deneyimi yaşayın.",
+    "logo_url": "",
+    "favicon_url": "",
+    "footer_text": "© Coinberx · MASAK uyumlu · Türkiye'nin yerel kripto borsası.",
+    "contact_email": "destek@coinberx.com",
+    "contact_phone": "+90 850 000 00 00",
+    "social_twitter": "",
+    "social_telegram": "",
+    "social_instagram": "",
+    "social_youtube": "",
+    "maintenance_mode": False,
+    "live_chat_enabled": True,
+    # Theme palette
+    "theme_primary": "#16A34A",
+    "theme_secondary": "#15803D",
+    "theme_accent": "#D4A017",
+    "theme_berx": "#D4A017",
+    "theme_background": "#F7F9FC",
+    "theme_card": "#FFFFFF",
+    "theme_text": "#0F172A",
+    "theme_button_radius": "0.5rem",
+    "theme_card_radius": "0.75rem",
+    # SEO defaults
+    "seo_title": "Coinberx | Güvenli ve Hızlı Kripto Para Borsası",
+    "seo_description": "Coinberx ile TRY ve USDT paritelerinde güvenli, hızlı ve modern kripto para alım satım deneyimi yaşayın.",
+    "seo_keywords": "kripto, bitcoin, ethereum, türk lirası, kripto borsası, coinberx",
+    "og_image": "",
+    "twitter_image": "",
+    "canonical_url": "",
+    "robots_index": True,
+    "pwa_theme_color": "#16A34A",
+    "pwa_background_color": "#F7F9FC",
+    # Price override mode (per coin) — global default uses market
+    "price_mode": "market",  # "market" | "manual"
+}
+
+
+# Branding fields exposed to the public (no admin secrets)
+PUBLIC_BRANDING_KEYS = {
+    "site_name", "site_slogan", "site_description", "logo_url", "favicon_url",
+    "footer_text", "contact_email", "contact_phone",
+    "social_twitter", "social_telegram", "social_instagram", "social_youtube",
+    "maintenance_mode", "live_chat_enabled",
+    "theme_primary", "theme_secondary", "theme_accent", "theme_berx",
+    "theme_background", "theme_card", "theme_text",
+    "theme_button_radius", "theme_card_radius",
+    "seo_title", "seo_description", "seo_keywords",
+    "og_image", "twitter_image", "canonical_url", "robots_index",
+    "pwa_theme_color", "pwa_background_color",
+    "kyc_enabled", "email_verification_enabled", "google_login_enabled",
+    "forgot_password_enabled", "registration_enabled",
 }
 
 
@@ -485,6 +596,10 @@ async def login(data: LoginIn, response: Response, request: Request):
             upsert=True,
         )
         raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı")
+    if user.get("deleted"):
+        raise HTTPException(status_code=403, detail="Hesap kapalı")
+    if user.get("account_status") == "banned":
+        raise HTTPException(status_code=403, detail="Hesap askıya alındı")
     await db.login_attempts.delete_one({"identifier": ident})
     await ensure_wallet(user["user_id"])
     # log login
@@ -793,8 +908,19 @@ async def my_withdrawals(user: dict = Depends(get_current_user)):
 @api.get("/markets")
 async def markets():
     rows = await mkt.fetch_all_tickers()
+    overrides = await get_price_overrides()
+    if overrides:
+        for r in rows:
+            if r["symbol"] in overrides:
+                ov = float(overrides[r["symbol"]])
+                # change is now vs original market — recompute pct
+                orig = r["price_try"] or ov
+                r["price_try"] = ov
+                if orig:
+                    r["change_24h"] = round(r.get("change_24h", 0) + ((ov - orig) / orig) * 100.0, 4)
+                r["override"] = True
     berx_ticker = await berx.get_ticker(db)
-    rows.insert(0, berx_ticker) if False else rows.append(berx_ticker)
+    rows.append(berx_ticker)
     return rows
 
 
@@ -823,6 +949,14 @@ async def market_detail(symbol: str):
     t = await mkt.fetch_ticker(symbol)
     if not t:
         raise HTTPException(status_code=404, detail="Coin bulunamadı")
+    overrides = await get_price_overrides()
+    if symbol.upper() in overrides:
+        ov = float(overrides[symbol.upper()])
+        orig = t["price_try"] or ov
+        t["price_try"] = ov
+        if orig:
+            t["change_24h"] = round(t.get("change_24h", 0) + ((ov - orig) / orig) * 100.0, 4)
+        t["override"] = True
     return t
 
 
@@ -1141,8 +1275,9 @@ async def push_notification(user_id: str, title: str, body: str, kind: str = "in
 
 # -------------- Admin --------------
 @api.get("/admin/users")
-async def admin_users(admin: dict = Depends(require_admin)):
-    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
+async def admin_users(include_deleted: bool = False, admin: dict = Depends(require_admin)):
+    q = {} if include_deleted else {"deleted": {"$ne": True}}
+    users = await db.users.find(q, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
     return users
 
 
@@ -1638,6 +1773,10 @@ async def admin_platform_address_upsert(data: PlatformAddressIn, request: Reques
             min_deposit=data.min_deposit or 0.0,
             deposit_enabled=data.deposit_enabled if data.deposit_enabled is not None else True,
             withdraw_enabled=data.withdraw_enabled if data.withdraw_enabled is not None else True,
+            contract_address=data.contract_address or "",
+            explorer_url=data.explorer_url or "",
+            memo_required=bool(data.memo_required),
+            memo_label=data.memo_label or "",
         ),
     )
     await log_admin_action(admin, "platform_address.upsert", "platform_address", f"{data.symbol.upper()}:{data.network.upper()}", {"address": data.address[:20] + "...", "deposit_enabled": data.deposit_enabled, "withdraw_enabled": data.withdraw_enabled}, request)
@@ -2066,8 +2205,16 @@ async def admin_live_chat_stats(admin: dict = Depends(require_admin)):
 # -------------- Public --------------
 @api.get("/settings")
 async def public_settings():
+    """Light-weight set of trading limits for the wallet pages."""
     s = await get_settings()
     return {k: s[k] for k in ["kyc_enforced", "min_deposit_try", "min_withdrawal_try", "trading_fee"]}
+
+
+@api.get("/branding")
+async def public_branding():
+    """Public branding/theme/SEO/auth-toggle bundle consumed by the frontend bootstrap."""
+    s = await get_settings()
+    return {k: s.get(k) for k in PUBLIC_BRANDING_KEYS}
 
 
 @api.get("/admin/settings")
@@ -2080,8 +2227,256 @@ async def admin_update_settings(data: SettingsIn, request: Request, admin: dict 
     upd = {k: v for k, v in data.model_dump(exclude_none=True).items()}
     if upd:
         await db.system_settings.update_one({"_id": "global"}, {"$set": upd}, upsert=True)
-    await log_admin_action(admin, "settings.update", "settings", "global", upd, request)
+    await log_admin_action(admin, "settings.update", "settings", "global", list(upd.keys()), request)
     return await get_settings()
+
+
+# -------------- Password reset --------------
+class PasswordForgotIn(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetIn(BaseModel):
+    token: str
+    new_password: str
+
+
+@api.post("/auth/password/forgot")
+async def password_forgot(data: PasswordForgotIn):
+    s = await get_settings()
+    if not s.get("forgot_password_enabled", True):
+        raise HTTPException(status_code=403, detail="Şifre sıfırlama devre dışı")
+    email = data.email.lower()
+    user = await db.users.find_one({"email": email})
+    # Always return ok to prevent user enumeration
+    if user:
+        token = secrets.token_urlsafe(32)
+        await db.password_resets.insert_one({
+            "token": token,
+            "user_id": user["user_id"],
+            "email": email,
+            "expires_at": (now_dt() + timedelta(minutes=30)).isoformat(),
+            "used": False,
+            "created_at": now_iso(),
+        })
+        frontend = os.environ.get("FRONTEND_URL", "")
+        link = f"{frontend}/reset-password?token={token}"
+        html = render_status(
+            "Şifre Sıfırlama",
+            f"<p>Şifre sıfırlama bağlantınız:</p><p><a href='{link}'>{link}</a></p><p>Bağlantı 30 dk geçerlidir.</p>",
+        )
+        await send_email(email, "Coinberx - Şifre Sıfırlama", html)
+        logger.info("Password reset link for %s: %s", email, link)
+    return {"ok": True}
+
+
+@api.post("/auth/password/reset")
+async def password_reset(data: PasswordResetIn):
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Şifre en az 8 karakter olmalı")
+    rec = await db.password_resets.find_one({"token": data.token, "used": False})
+    if not rec:
+        raise HTTPException(status_code=400, detail="Geçersiz veya kullanılmış bağlantı")
+    expires = rec.get("expires_at")
+    if expires and datetime.fromisoformat(expires) < now_dt():
+        raise HTTPException(status_code=400, detail="Bağlantının süresi dolmuş")
+    await db.users.update_one(
+        {"user_id": rec["user_id"]},
+        {"$set": {"password_hash": hash_password(data.new_password)}},
+    )
+    await db.password_resets.update_one({"token": data.token}, {"$set": {"used": True, "used_at": now_iso()}})
+    return {"ok": True}
+
+
+# -------------- Bulk coin price override --------------
+class BulkPriceIn(BaseModel):
+    action: str  # "percent_all" | "percent_selected" | "set_one" | "reset"
+    percent: Optional[float] = None
+    symbols: Optional[List[str]] = None
+    symbol: Optional[str] = None
+    price_try: Optional[float] = None
+
+
+async def get_price_overrides() -> dict:
+    doc = await db.price_overrides.find_one({"_id": "global"})
+    return (doc or {}).get("overrides", {})
+
+
+async def save_price_snapshot(reason: str, current: dict):
+    await db.price_snapshots.insert_one({
+        "snapshot_id": new_id("snap_"),
+        "reason": reason,
+        "overrides": current,
+        "created_at": now_iso(),
+    })
+
+
+@api.get("/admin/prices/overrides")
+async def admin_price_overrides(admin: dict = Depends(require_admin)):
+    overrides = await get_price_overrides()
+    snaps = await db.price_snapshots.find({}, {"_id": 0}).sort("created_at", -1).limit(20).to_list(20)
+    return {"overrides": overrides, "snapshots": snaps}
+
+
+@api.post("/admin/prices/bulk")
+async def admin_price_bulk(data: BulkPriceIn, request: Request, admin: dict = Depends(require_admin)):
+    current = await get_price_overrides()
+    await save_price_snapshot("pre_" + data.action, current)
+    tickers = await mkt.fetch_all_tickers()
+    market_map = {t["symbol"]: t["price_try"] for t in tickers}
+
+    def _apply_pct(symbols: List[str], pct: float):
+        for sym in symbols:
+            base = current.get(sym) or market_map.get(sym)
+            if base:
+                current[sym] = round(float(base) * (1 + pct / 100.0), 6)
+
+    if data.action == "percent_all":
+        if data.percent is None:
+            raise HTTPException(status_code=400, detail="percent gerekli")
+        _apply_pct(list(market_map.keys()), data.percent)
+    elif data.action == "percent_selected":
+        if data.percent is None or not data.symbols:
+            raise HTTPException(status_code=400, detail="percent ve symbols gerekli")
+        _apply_pct([s.upper() for s in data.symbols], data.percent)
+    elif data.action == "set_one":
+        if not data.symbol or data.price_try is None:
+            raise HTTPException(status_code=400, detail="symbol ve price_try gerekli")
+        current[data.symbol.upper()] = round(float(data.price_try), 6)
+    elif data.action == "reset":
+        current = {}
+    else:
+        raise HTTPException(status_code=400, detail="Geçersiz aksiyon")
+
+    await db.price_overrides.update_one(
+        {"_id": "global"}, {"$set": {"overrides": current, "updated_at": now_iso()}}, upsert=True
+    )
+    await log_admin_action(admin, f"price.{data.action}", "price", None, data.model_dump(exclude_none=True), request)
+    # invalidate ticker cache so /markets sees overrides immediately
+    mkt._cache.pop("tickers", None)
+    return {"ok": True, "overrides": current}
+
+
+@api.post("/admin/prices/rollback/{snapshot_id}")
+async def admin_price_rollback(snapshot_id: str, request: Request, admin: dict = Depends(require_admin)):
+    snap = await db.price_snapshots.find_one({"snapshot_id": snapshot_id})
+    if not snap:
+        raise HTTPException(status_code=404, detail="Snapshot bulunamadı")
+    overrides = snap.get("overrides", {})
+    await db.price_overrides.update_one(
+        {"_id": "global"}, {"$set": {"overrides": overrides, "updated_at": now_iso()}}, upsert=True
+    )
+    await log_admin_action(admin, "price.rollback", "price", snapshot_id, {}, request)
+    mkt._cache.pop("tickers", None)
+    return {"ok": True, "overrides": overrides}
+
+
+# -------------- User edit / soft delete --------------
+class UserEditIn(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+    email_verified: Optional[bool] = None
+    kyc_status: Optional[str] = None
+    account_status: Optional[str] = None  # active | banned | suspended
+
+
+@api.patch("/admin/users/{user_id}")
+async def admin_user_edit(user_id: str, data: UserEditIn, request: Request, admin: dict = Depends(require_admin)):
+    upd = {k: v for k, v in data.model_dump(exclude_none=True).items()}
+    if not upd:
+        return {"ok": True}
+    if "role" in upd and upd["role"] not in {"user", "admin"}:
+        raise HTTPException(status_code=400, detail="Geçersiz rol")
+    if "kyc_status" in upd and upd["kyc_status"] not in {"none", "pending", "approved", "rejected"}:
+        raise HTTPException(status_code=400, detail="Geçersiz KYC durumu")
+    if "account_status" in upd and upd["account_status"] not in {"active", "banned", "suspended"}:
+        raise HTTPException(status_code=400, detail="Geçersiz hesap durumu")
+    if "email" in upd:
+        upd["email"] = upd["email"].lower()
+        existing = await db.users.find_one({"email": upd["email"], "user_id": {"$ne": user_id}})
+        if existing:
+            raise HTTPException(status_code=400, detail="Bu e-posta zaten kullanılıyor")
+    await db.users.update_one({"user_id": user_id}, {"$set": upd})
+    await log_admin_action(admin, "user.edit", "user", user_id, list(upd.keys()), request)
+    return {"ok": True}
+
+
+@api.delete("/admin/users/{user_id}")
+async def admin_user_soft_delete(user_id: str, request: Request, admin: dict = Depends(require_admin)):
+    user = await db.users.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+    if user.get("role") == "admin":
+        raise HTTPException(status_code=400, detail="Admin hesabı silinemez")
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "deleted": True,
+            "deleted_at": now_iso(),
+            "account_status": "banned",
+            "email": f"deleted_{user_id}@coinberx.local",
+            "original_email": user.get("email"),
+        }},
+    )
+    await log_admin_action(admin, "user.soft_delete", "user", user_id, {"email": user.get("email")}, request)
+    return {"ok": True}
+
+
+@api.get("/admin/users/{user_id}")
+async def admin_user_detail(user_id: str, admin: dict = Depends(require_admin)):
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+    wallet = await db.wallets.find_one({"user_id": user_id}, {"_id": 0})
+    tx_count = await db.transactions.count_documents({"user_id": user_id})
+    chat_count = await db.live_chat_sessions.count_documents({"user_id": user_id})
+    return {"user": user, "wallet": wallet, "tx_count": tx_count, "chat_count": chat_count}
+
+
+# -------------- SEO per page --------------
+class SeoPageIn(BaseModel):
+    slug: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    image: Optional[str] = None
+    enabled: Optional[bool] = True
+
+
+@api.get("/seo/pages")
+async def list_seo_pages():
+    rows = await db.seo_pages.find({}, {"_id": 0}).to_list(200)
+    return rows
+
+
+@api.get("/seo/pages/{slug}")
+async def get_seo_page(slug: str):
+    p = await db.seo_pages.find_one({"slug": slug.lower()}, {"_id": 0})
+    if not p:
+        raise HTTPException(status_code=404, detail="SEO sayfası bulunamadı")
+    return p
+
+
+@api.put("/admin/seo/pages")
+async def admin_seo_upsert(data: SeoPageIn, request: Request, admin: dict = Depends(require_admin)):
+    doc = data.model_dump(exclude_none=False)
+    doc["slug"] = doc["slug"].lower()
+    doc["updated_at"] = now_iso()
+    await db.seo_pages.update_one(
+        {"slug": doc["slug"]},
+        {"$set": doc, "$setOnInsert": {"created_at": now_iso()}},
+        upsert=True,
+    )
+    await log_admin_action(admin, "seo.upsert", "seo_page", doc["slug"], list(doc.keys()), request)
+    return await db.seo_pages.find_one({"slug": doc["slug"]}, {"_id": 0})
+
+
+@api.delete("/admin/seo/pages/{slug}")
+async def admin_seo_delete(slug: str, request: Request, admin: dict = Depends(require_admin)):
+    await db.seo_pages.delete_one({"slug": slug.lower()})
+    await log_admin_action(admin, "seo.delete", "seo_page", slug.lower(), {}, request)
+    return {"ok": True}
 
 
 @api.get("/")
@@ -2153,6 +2548,11 @@ async def on_startup():
     await db.live_chat_sessions.create_index("visitor_id")
     await db.live_chat_messages.create_index([("session_id", 1), ("created_at", 1)])
     await db.platform_addresses.create_index([("symbol", 1), ("network", 1)], unique=True)
+    await db.password_resets.create_index("token", unique=True)
+    await db.password_resets.create_index([("expires_at", 1)])
+    await db.price_overrides.create_index("_id")
+    await db.price_snapshots.create_index([("created_at", -1)])
+    await db.seo_pages.create_index("slug", unique=True)
     init_storage()
     await berx.seed_berx(db)
     await nw.seed_networks(db)

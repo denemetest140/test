@@ -1,8 +1,17 @@
 import { useEffect, useState, useRef } from "react";
 import { api, formatTRY, errToStr } from "../lib/api";
 import { toast } from "sonner";
+import { useSettings } from "../contexts/SettingsContext";
 
-const TABS = [["overview","Özet"],["users","Kullanıcılar"],["kyc","KYC"],["deposits","Yatırmalar"],["withdrawals","Çekmeler"],["cwithdrawals","Kripto Çekimleri"],["transfers","Transferler"],["networks","Ağlar"],["addresses","Coin Adresleri"],["berx","BERX Coin"],["livechat","Canlı Destek"],["support","Destek Mesajları"],["activity","Etkinlik Kayıtları"],["settings","Ayarlar"]];
+const TABS = [
+  ["overview","Özet"],["users","Kullanıcılar"],["kyc","KYC"],
+  ["deposits","Yatırmalar"],["withdrawals","Çekmeler"],["cwithdrawals","Kripto Çekimleri"],
+  ["transfers","Transferler"],["networks","Ağlar"],["addresses","Coin Adresleri"],
+  ["bulkprice","Coin Fiyatları"],["berx","BERX Coin"],
+  ["livechat","Canlı Destek"],["support","Destek Mesajları"],
+  ["activity","Etkinlik Kayıtları"],["siteinfo","Site Ayarları"],
+  ["theme","Tema"],["seo","SEO"],["settings","İşlem Ayarları"],
+];
 
 export default function Admin() {
   const [tab, setTab] = useState("overview");
@@ -59,21 +68,7 @@ export default function Admin() {
       )}
 
       {tab === "users" && (
-        <div className="card-surface overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="text-xs text-[#64748B] text-left"><th className="px-4 py-2">Ad</th><th>E-posta</th><th>Rol</th><th>KYC</th><th>Kayıt</th></tr></thead>
-            <tbody className="divide-y divide-[#E2E8F0]">
-              {users.map((u) => (
-                <tr key={u.user_id}>
-                  <td className="px-4 py-2">{u.name}</td><td>{u.email}</td>
-                  <td className="text-xs">{u.role}</td>
-                  <td><span className={u.kyc_status==="approved"?"text-[#16A34A]":u.kyc_status==="pending"?"text-[#D97706]":u.kyc_status==="rejected"?"text-[#DC2626]":"text-[#64748B]"}>{u.kyc_status}</span></td>
-                  <td className="text-xs text-[#64748B]">{new Date(u.created_at).toLocaleDateString("tr-TR")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <UsersPanel users={users} onReload={load} />
       )}
 
       {tab === "kyc" && (
@@ -177,6 +172,11 @@ export default function Admin() {
           catch (e) { toast.error(errToStr(e)); }
         }} />
       )}
+
+      {tab === "bulkprice" && <BulkPricePanel />}
+      {tab === "seo" && <SeoPanel />}
+      {tab === "siteinfo" && settings && <SiteInfoPanel settings={settings} onSave={async (u) => { try { const { data } = await api.patch("/admin/settings", u); setSettings(data); toast.success("Site ayarları kaydedildi"); } catch (e) { toast.error(errToStr(e)); } }} />}
+      {tab === "theme" && settings && <ThemePanel settings={settings} onSave={async (u) => { try { const { data } = await api.patch("/admin/settings", u); setSettings(data); toast.success("Tema kaydedildi"); } catch (e) { toast.error(errToStr(e)); } }} />}
     </div>
   );
 }
@@ -946,3 +946,419 @@ function PlatformAddressesPanel() {
   );
 }
 
+
+
+/* ============== Users (edit / soft delete / detail) ============== */
+function UsersPanel({ users: initUsers, onReload }) {
+  const [search, setSearch] = useState("");
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [list, setList] = useState(initUsers);
+  const [editing, setEditing] = useState(null);
+  const [detail, setDetail] = useState(null);
+
+  const reload = () => {
+    api.get(`/admin/users${showDeleted ? "?include_deleted=true" : ""}`)
+      .then((r) => setList(r.data || []))
+      .catch(() => {});
+  };
+  useEffect(() => { reload(); }, [showDeleted]);
+  useEffect(() => { setList(initUsers); }, [initUsers]);
+
+  const filtered = list.filter((u) => {
+    const q = search.toLowerCase();
+    return !q || (u.email||"").toLowerCase().includes(q) || (u.name||"").toLowerCase().includes(q) || (u.original_email||"").toLowerCase().includes(q);
+  });
+
+  const openDetail = async (id) => {
+    try { const { data } = await api.get(`/admin/users/${id}`); setDetail(data); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+
+  const saveEdit = async (upd) => {
+    try { await api.patch(`/admin/users/${editing.user_id}`, upd); toast.success("Güncellendi"); setEditing(null); reload(); onReload?.(); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+  const softDelete = async (u) => {
+    if (!window.confirm(`${u.email} kullanıcısı silinsin mi? (soft delete)`)) return;
+    try { await api.delete(`/admin/users/${u.user_id}`); toast.success("Kullanıcı silindi"); reload(); onReload?.(); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <input data-testid="users-search" className="input-field max-w-sm" placeholder="Ad veya e-posta ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" data-testid="users-show-deleted" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />
+          Silinmiş kullanıcıları göster
+        </label>
+        <div className="text-xs text-[#64748B] ml-auto">Toplam: {filtered.length}</div>
+      </div>
+      <div className="card-surface overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead><tr className="text-xs text-[#64748B] text-left"><th className="px-4 py-2">Ad</th><th>E-posta</th><th>Rol</th><th>KYC</th><th>Durum</th><th>Kayıt</th><th></th></tr></thead>
+          <tbody className="divide-y divide-[#E2E8F0]">
+            {filtered.map((u) => (
+              <tr key={u.user_id} className={u.deleted?"opacity-50":""}>
+                <td className="px-4 py-2">{u.name}</td>
+                <td className="text-xs">{u.original_email || u.email}{u.deleted && <span className="ml-2 text-[#DC2626] text-[10px]">(silinmiş)</span>}</td>
+                <td className="text-xs"><span className={u.role==="admin"?"text-[#16A34A] font-medium":""}>{u.role}</span></td>
+                <td><span className={u.kyc_status==="approved"?"text-[#16A34A]":u.kyc_status==="pending"?"text-[#D97706]":u.kyc_status==="rejected"?"text-[#DC2626]":"text-[#64748B]"}>{u.kyc_status}</span></td>
+                <td className="text-xs">{u.account_status || "active"}</td>
+                <td className="text-xs text-[#64748B]">{new Date(u.created_at).toLocaleDateString("tr-TR")}</td>
+                <td className="text-xs">
+                  <div className="flex gap-1 justify-end">
+                    <button data-testid={`user-view-${u.user_id}`} onClick={() => openDetail(u.user_id)} className="px-2 py-1 rounded border border-[#E2E8F0] hover:bg-[#F1F5F9]">Detay</button>
+                    {!u.deleted && (
+                      <>
+                        <button data-testid={`user-edit-${u.user_id}`} onClick={() => setEditing(u)} className="px-2 py-1 rounded bg-[#16A34A] text-white">Düzenle</button>
+                        {u.role !== "admin" && (
+                          <button data-testid={`user-delete-${u.user_id}`} onClick={() => softDelete(u)} className="px-2 py-1 rounded bg-[#DC2626] text-white">Sil</button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {editing && <UserEditModal user={editing} onClose={() => setEditing(null)} onSave={saveEdit} />}
+      {detail && <UserDetailModal data={detail} onClose={() => setDetail(null)} />}
+    </div>
+  );
+}
+
+function UserEditModal({ user, onClose, onSave }) {
+  const [f, setF] = useState({
+    name: user.name || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    role: user.role || "user",
+    email_verified: !!user.email_verified,
+    kyc_status: user.kyc_status || "none",
+    account_status: user.account_status || "active",
+  });
+  return (
+    <Modal onClose={onClose} title={`Kullanıcı Düzenle — ${user.email}`}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Ad Soyad"><input className="input-field" value={f.name} onChange={(e) => setF({...f, name: e.target.value})} data-testid="user-edit-name" /></Field>
+        <Field label="E-posta"><input className="input-field" value={f.email} onChange={(e) => setF({...f, email: e.target.value})} data-testid="user-edit-email" /></Field>
+        <Field label="Telefon"><input className="input-field" value={f.phone} onChange={(e) => setF({...f, phone: e.target.value})} data-testid="user-edit-phone" /></Field>
+        <Field label="Rol"><select className="input-field" value={f.role} onChange={(e) => setF({...f, role: e.target.value})} data-testid="user-edit-role"><option value="user">user</option><option value="admin">admin</option></select></Field>
+        <Field label="KYC"><select className="input-field" value={f.kyc_status} onChange={(e) => setF({...f, kyc_status: e.target.value})} data-testid="user-edit-kyc"><option value="none">none</option><option value="pending">pending</option><option value="approved">approved</option><option value="rejected">rejected</option></select></Field>
+        <Field label="Hesap Durumu"><select className="input-field" value={f.account_status} onChange={(e) => setF({...f, account_status: e.target.value})} data-testid="user-edit-status"><option value="active">active</option><option value="suspended">suspended</option><option value="banned">banned</option></select></Field>
+        <Field label="E-posta Doğrulanmış">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.email_verified} onChange={(e) => setF({...f, email_verified: e.target.checked})} data-testid="user-edit-verified" /> Doğrulanmış olarak işaretle</label>
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2 mt-5">
+        <button onClick={onClose} className="px-4 py-2 rounded-lg border border-[#E2E8F0] text-sm">Vazgeç</button>
+        <button onClick={() => onSave(f)} className="btn-primary px-4 py-2 rounded-lg text-sm" data-testid="user-edit-save">Kaydet</button>
+      </div>
+    </Modal>
+  );
+}
+
+function UserDetailModal({ data, onClose }) {
+  const { user, wallet, tx_count, chat_count } = data;
+  return (
+    <Modal onClose={onClose} title={`Kullanıcı Detayı — ${user.email}`}>
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <div><div className="text-xs text-[#64748B]">Ad</div><div>{user.name}</div></div>
+        <div><div className="text-xs text-[#64748B]">User ID</div><div className="font-mono text-xs">{user.user_id}</div></div>
+        <div><div className="text-xs text-[#64748B]">Rol</div><div>{user.role}</div></div>
+        <div><div className="text-xs text-[#64748B]">KYC</div><div>{user.kyc_status}</div></div>
+        <div><div className="text-xs text-[#64748B]">İşlem Sayısı</div><div>{tx_count}</div></div>
+        <div><div className="text-xs text-[#64748B]">Sohbet Sayısı</div><div>{chat_count}</div></div>
+        <div className="col-span-2">
+          <div className="text-xs text-[#64748B] mb-2">Cüzdan</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {wallet ? Object.entries(wallet.balances || {}).filter(([,v]) => v > 0).map(([k, v]) => (
+              <div key={k} className="px-3 py-2 rounded-lg bg-[#F8FAFC] text-xs"><span className="font-medium">{k}</span> <span className="float-right tabular">{Number(v).toFixed(6)}</span></div>
+            )) : <div className="text-xs text-[#64748B]">Cüzdan yok</div>}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function Modal({ title, children, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-xl">{title}</h2>
+          <button onClick={onClose} className="text-[#64748B] hover:text-[#0F172A]">✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label className="text-xs text-[#64748B]">{label}</label>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+/* ============== Bulk Coin Price Management ============== */
+function BulkPricePanel() {
+  const [data, setData] = useState({ overrides: {}, snapshots: [] });
+  const [tickers, setTickers] = useState([]);
+  const [pct, setPct] = useState("");
+  const [selected, setSelected] = useState([]);
+  const [oneSym, setOneSym] = useState("BTC");
+  const [onePrice, setOnePrice] = useState("");
+  const load = () => {
+    api.get("/admin/prices/overrides").then((r) => setData(r.data)).catch(() => {});
+    api.get("/markets").then((r) => setTickers(r.data || [])).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+
+  const apply = async (body) => {
+    try { await api.post("/admin/prices/bulk", body); toast.success("Uygulandı"); load(); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+  const rollback = async (snap_id) => {
+    try { await api.post(`/admin/prices/rollback/${snap_id}`); toast.success("Geri alındı"); load(); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+
+  const toggle = (s) => setSelected((cur) => cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s]);
+
+  return (
+    <div className="space-y-4">
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Toplu Fiyat İşlemleri</div>
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Yüzde (%)">
+            <input type="number" step="0.1" className="input-field w-32 tabular" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="örn 5 / -3" data-testid="bulk-pct" />
+          </Field>
+          <button onClick={() => apply({ action: "percent_all", percent: Number(pct) })} className="btn-primary px-4 py-2 rounded-lg text-sm" data-testid="bulk-all">Tüm Coinleri Uygula</button>
+          <button onClick={() => apply({ action: "percent_selected", percent: Number(pct), symbols: selected })} disabled={!selected.length} className="px-4 py-2 rounded-lg border border-[#16A34A] text-[#16A34A] text-sm disabled:opacity-50" data-testid="bulk-selected">Seçilenlere Uygula ({selected.length})</button>
+          <button onClick={() => apply({ action: "reset" })} className="px-4 py-2 rounded-lg border border-[#DC2626] text-[#DC2626] text-sm" data-testid="bulk-reset">Override&apos;ları Sıfırla</button>
+        </div>
+        <div className="flex flex-wrap items-end gap-3 mt-4 pt-4 border-t border-[#E2E8F0]">
+          <Field label="Coin">
+            <select className="input-field w-32" value={oneSym} onChange={(e) => setOneSym(e.target.value)} data-testid="bulk-one-sym">
+              {tickers.map((t) => <option key={t.symbol} value={t.symbol}>{t.symbol}</option>)}
+            </select>
+          </Field>
+          <Field label="Yeni Fiyat (TRY)">
+            <input type="number" step="0.0001" className="input-field w-40 tabular" value={onePrice} onChange={(e) => setOnePrice(e.target.value)} data-testid="bulk-one-price" />
+          </Field>
+          <button onClick={() => apply({ action: "set_one", symbol: oneSym, price_try: Number(onePrice) })} className="btn-primary px-4 py-2 rounded-lg text-sm" data-testid="bulk-one-apply">Tek Coin Fiyatını Ayarla</button>
+        </div>
+      </div>
+
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Coinler ({tickers.length})</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-96 overflow-y-auto">
+          {tickers.map((t) => {
+            const ov = data.overrides?.[t.symbol];
+            return (
+              <label key={t.symbol} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${selected.includes(t.symbol)?"border-[#16A34A] bg-[#16A34A]/5":"border-[#E2E8F0]"} cursor-pointer`}>
+                <input type="checkbox" checked={selected.includes(t.symbol)} onChange={() => toggle(t.symbol)} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium">{t.symbol}</div>
+                  <div className="text-[10px] text-[#64748B] tabular">{formatTRY(ov || t.price_try)}{ov && <span className="text-[#D97706] ml-1">●</span>}</div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Snapshot Geçmişi (geri alma)</div>
+        <div className="space-y-2 max-h-80 overflow-y-auto">
+          {data.snapshots?.length ? data.snapshots.map((s) => (
+            <div key={s.snapshot_id} className="flex items-center justify-between p-3 border border-[#E2E8F0] rounded-lg">
+              <div>
+                <div className="text-sm font-medium">{s.reason}</div>
+                <div className="text-xs text-[#64748B]">{new Date(s.created_at).toLocaleString("tr-TR")} · {Object.keys(s.overrides||{}).length} coin</div>
+              </div>
+              <button onClick={() => rollback(s.snapshot_id)} className="px-3 py-1.5 rounded bg-[#16A34A] text-white text-xs" data-testid={`bulk-rollback-${s.snapshot_id}`}>Bu Duruma Dön</button>
+            </div>
+          )) : <div className="text-xs text-[#64748B] text-center py-4">Henüz snapshot yok</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============== Site Info (logo, brand, contact, social, toggles) ============== */
+function SiteInfoPanel({ settings, onSave }) {
+  const { refresh } = useSettings();
+  const [f, setF] = useState(settings);
+  useEffect(() => { setF(settings); }, [settings]);
+  const upd = (k, v) => setF((cur) => ({ ...cur, [k]: v }));
+  const save = async () => { await onSave(f); refresh(); };
+  return (
+    <div className="space-y-4 max-w-4xl">
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Marka Kimliği</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Site Adı"><input data-testid="site-name" className="input-field" value={f.site_name||""} onChange={(e) => upd("site_name", e.target.value)} /></Field>
+          <Field label="Site Sloganı"><input data-testid="site-slogan" className="input-field" value={f.site_slogan||""} onChange={(e) => upd("site_slogan", e.target.value)} /></Field>
+          <Field label="Logo URL"><input data-testid="site-logo" className="input-field" value={f.logo_url||""} onChange={(e) => upd("logo_url", e.target.value)} placeholder="https://..." /></Field>
+          <Field label="Favicon URL"><input data-testid="site-favicon" className="input-field" value={f.favicon_url||""} onChange={(e) => upd("favicon_url", e.target.value)} placeholder="https://.../favicon.png" /></Field>
+          <Field label="Açıklama (footer)"><textarea data-testid="site-desc" className="input-field" value={f.site_description||""} onChange={(e) => upd("site_description", e.target.value)} rows={2} /></Field>
+          <Field label="Footer metni"><input className="input-field" value={f.footer_text||""} onChange={(e) => upd("footer_text", e.target.value)} /></Field>
+        </div>
+      </div>
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">İletişim & Sosyal Medya</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="İletişim e-postası"><input data-testid="site-contact-email" className="input-field" value={f.contact_email||""} onChange={(e) => upd("contact_email", e.target.value)} /></Field>
+          <Field label="Telefon"><input className="input-field" value={f.contact_phone||""} onChange={(e) => upd("contact_phone", e.target.value)} /></Field>
+          <Field label="Twitter/X"><input className="input-field" value={f.social_twitter||""} onChange={(e) => upd("social_twitter", e.target.value)} placeholder="https://x.com/coinberx" /></Field>
+          <Field label="Telegram"><input className="input-field" value={f.social_telegram||""} onChange={(e) => upd("social_telegram", e.target.value)} /></Field>
+          <Field label="Instagram"><input className="input-field" value={f.social_instagram||""} onChange={(e) => upd("social_instagram", e.target.value)} /></Field>
+          <Field label="YouTube"><input className="input-field" value={f.social_youtube||""} onChange={(e) => upd("social_youtube", e.target.value)} /></Field>
+        </div>
+      </div>
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Auth & Özellik Anahtarları</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {[
+            ["maintenance_mode","Bakım modu (admin hariç site kapalı)"],
+            ["live_chat_enabled","Canlı destek butonu aktif"],
+            ["kyc_enabled","KYC modülü aktif"],
+            ["email_verification_enabled","E-posta doğrulama aktif"],
+            ["email_verification_required","E-posta doğrulama zorunlu"],
+            ["google_login_enabled","Google ile giriş aktif"],
+            ["forgot_password_enabled","Şifremi unuttum aktif"],
+            ["registration_enabled","Yeni kayıt aktif"],
+            ["robots_index","Robots indexable"],
+          ].map(([k, lbl]) => (
+            <label key={k} className="flex items-center justify-between p-3 border border-[#E2E8F0] rounded-lg">
+              <span className="text-sm">{lbl}</span>
+              <button data-testid={`toggle-${k}`} type="button" onClick={() => upd(k, !f[k])} className={`relative w-11 h-6 rounded-full transition ${f[k]?"bg-[#16A34A]":"bg-[#E2E8F0]"}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${f[k]?"translate-x-5":""}`} />
+              </button>
+            </label>
+          ))}
+        </div>
+      </div>
+      <button onClick={save} className="btn-primary px-5 py-2.5 rounded-lg text-sm" data-testid="siteinfo-save">Site Ayarlarını Kaydet</button>
+    </div>
+  );
+}
+
+/* ============== Theme Editor ============== */
+function ThemePanel({ settings, onSave }) {
+  const { refresh } = useSettings();
+  const [f, setF] = useState(settings);
+  useEffect(() => { setF(settings); }, [settings]);
+  const upd = (k, v) => setF((cur) => ({ ...cur, [k]: v }));
+  const save = async () => { await onSave(f); refresh(); };
+  const colorFields = [
+    ["theme_primary","Ana renk (primary)"],["theme_secondary","İkincil renk"],
+    ["theme_accent","Vurgu rengi"],["theme_berx","BERX rengi (gold)"],
+    ["theme_background","Arka plan"],["theme_card","Kart"],["theme_text","Metin"],
+    ["pwa_theme_color","PWA tema rengi"],["pwa_background_color","PWA arka plan"],
+  ];
+  return (
+    <div className="space-y-4 max-w-4xl">
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Renk Paleti</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {colorFields.map(([k, lbl]) => (
+            <Field key={k} label={lbl}>
+              <div className="flex gap-2 items-center">
+                <input type="color" className="w-10 h-10 rounded border border-[#E2E8F0]" value={f[k]||"#000000"} onChange={(e) => upd(k, e.target.value)} data-testid={`color-${k}`} />
+                <input type="text" className="input-field flex-1 tabular" value={f[k]||""} onChange={(e) => upd(k, e.target.value)} />
+              </div>
+            </Field>
+          ))}
+          <Field label="Buton köşe yarıçapı"><input className="input-field" value={f.theme_button_radius||""} onChange={(e) => upd("theme_button_radius", e.target.value)} placeholder="0.5rem" /></Field>
+          <Field label="Kart köşe yarıçapı"><input className="input-field" value={f.theme_card_radius||""} onChange={(e) => upd("theme_card_radius", e.target.value)} placeholder="0.75rem" /></Field>
+        </div>
+      </div>
+      <button onClick={save} className="btn-primary px-5 py-2.5 rounded-lg text-sm" data-testid="theme-save">Tema Kaydet (Anında uygulanır)</button>
+    </div>
+  );
+}
+
+/* ============== SEO Pages ============== */
+function SeoPanel() {
+  const { refresh } = useSettings();
+  const [pages, setPages] = useState([]);
+  const [global, setGlobal] = useState(null);
+  const [editing, setEditing] = useState({ slug: "", title: "", description: "", image: "", enabled: true });
+  const load = () => {
+    api.get("/seo/pages").then((r) => setPages(r.data || [])).catch(() => {});
+    api.get("/admin/settings").then((r) => setGlobal(r.data)).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+  const save = async () => {
+    if (!editing.slug) { toast.error("Slug gerekli"); return; }
+    try { await api.put("/admin/seo/pages", editing); toast.success("Kaydedildi"); setEditing({ slug: "", title: "", description: "", image: "", enabled: true }); load(); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+  const remove = async (slug) => {
+    if (!window.confirm(`${slug} SEO ayarı silinsin mi?`)) return;
+    try { await api.delete(`/admin/seo/pages/${slug}`); load(); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+  const saveGlobal = async (upd) => {
+    try { const { data } = await api.patch("/admin/settings", upd); setGlobal(data); refresh(); toast.success("Global SEO kaydedildi"); }
+    catch (e) { toast.error(errToStr(e)); }
+  };
+  return (
+    <div className="space-y-4 max-w-4xl">
+      {global && (
+        <div className="card-surface p-5">
+          <div className="text-sm font-medium mb-3">Global SEO (varsayılan)</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Title"><input className="input-field" value={global.seo_title||""} onChange={(e) => setGlobal({...global, seo_title: e.target.value})} /></Field>
+            <Field label="Keywords"><input className="input-field" value={global.seo_keywords||""} onChange={(e) => setGlobal({...global, seo_keywords: e.target.value})} /></Field>
+            <Field label="Description"><textarea rows={2} className="input-field" value={global.seo_description||""} onChange={(e) => setGlobal({...global, seo_description: e.target.value})} /></Field>
+            <Field label="Open Graph Image URL"><input className="input-field" value={global.og_image||""} onChange={(e) => setGlobal({...global, og_image: e.target.value})} /></Field>
+            <Field label="Twitter Image URL"><input className="input-field" value={global.twitter_image||""} onChange={(e) => setGlobal({...global, twitter_image: e.target.value})} /></Field>
+            <Field label="Canonical URL"><input className="input-field" value={global.canonical_url||""} onChange={(e) => setGlobal({...global, canonical_url: e.target.value})} /></Field>
+          </div>
+          <button data-testid="seo-global-save" onClick={() => saveGlobal({ seo_title: global.seo_title, seo_description: global.seo_description, seo_keywords: global.seo_keywords, og_image: global.og_image, twitter_image: global.twitter_image, canonical_url: global.canonical_url })} className="btn-primary px-4 py-2 rounded-lg text-sm mt-3">Global SEO Kaydet</button>
+        </div>
+      )}
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Sayfa Bazlı SEO</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Slug (örn: markets, about)"><input className="input-field" value={editing.slug} onChange={(e) => setEditing({...editing, slug: e.target.value})} data-testid="seo-slug" /></Field>
+          <Field label="Title"><input className="input-field" value={editing.title} onChange={(e) => setEditing({...editing, title: e.target.value})} data-testid="seo-title" /></Field>
+          <Field label="Description"><textarea rows={2} className="input-field" value={editing.description} onChange={(e) => setEditing({...editing, description: e.target.value})} data-testid="seo-description" /></Field>
+          <Field label="OG Image URL"><input className="input-field" value={editing.image} onChange={(e) => setEditing({...editing, image: e.target.value})} /></Field>
+        </div>
+        <button onClick={save} className="btn-primary px-4 py-2 rounded-lg text-sm mt-3" data-testid="seo-save">Kaydet / Güncelle</button>
+      </div>
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Mevcut SEO Sayfaları</div>
+        {pages.length ? (
+          <div className="space-y-2">
+            {pages.map((p) => (
+              <div key={p.slug} className="flex items-center justify-between p-3 border border-[#E2E8F0] rounded-lg">
+                <div>
+                  <div className="text-sm font-medium">/{p.slug}</div>
+                  <div className="text-xs text-[#64748B]">{p.title}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setEditing(p)} className="px-3 py-1.5 rounded border border-[#E2E8F0] text-xs">Düzenle</button>
+                  <button onClick={() => remove(p.slug)} className="px-3 py-1.5 rounded bg-[#DC2626] text-white text-xs">Sil</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <div className="text-xs text-[#64748B] text-center py-4">Henüz sayfa-spesifik SEO yok</div>}
+      </div>
+    </div>
+  );
+}

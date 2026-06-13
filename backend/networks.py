@@ -17,6 +17,10 @@ class PlatformAddressPayload:
     min_deposit: float = 0.0
     deposit_enabled: bool = True
     withdraw_enabled: bool = True
+    contract_address: str = ""
+    explorer_url: str = ""
+    memo_required: bool = False
+    memo_label: str = ""
 
 
 DEFAULT_NETWORKS = [
@@ -120,6 +124,10 @@ async def upsert_platform_address(
         "min_deposit": float(payload.min_deposit or 0.0),
         "deposit_enabled": bool(payload.deposit_enabled),
         "withdraw_enabled": bool(payload.withdraw_enabled),
+        "contract_address": (payload.contract_address or "").strip(),
+        "explorer_url": (payload.explorer_url or "").strip(),
+        "memo_required": bool(payload.memo_required),
+        "memo_label": (payload.memo_label or "").strip(),
         "updated_at": now_iso,
     }
     await db.platform_addresses.update_one(

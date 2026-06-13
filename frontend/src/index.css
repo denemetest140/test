@@ -12,18 +12,29 @@
    ========================================================= */
 
 :root {
-  --bg: #F7F9FC;
+  /* Admin-overridable theme vars (set via SettingsContext) */
+  --cb-primary: #16A34A;
+  --cb-secondary: #15803D;
+  --cb-accent: #D4A017;
+  --cb-berx: #D4A017;
+  --cb-bg: #F7F9FC;
+  --cb-card: #FFFFFF;
+  --cb-text: #0F172A;
+  --cb-button-radius: 0.5rem;
+  --cb-card-radius: 0.75rem;
+
+  --bg: var(--cb-bg);
   --bg-soft: #F2F5F9;
-  --surface: #FFFFFF;
+  --surface: var(--cb-card);
   --surface-hover: #F8FAFC;
   --surface-soft: #FFFFFF;
   --border: #E2E8F0;
   --border-strong: #CBD5E1;
-  --primary: #16A34A;          /* corporate green */
-  --primary-hover: #15803D;
-  --gold: #D4A017;             /* gold accent for BERX */
+  --primary: var(--cb-primary);          /* corporate green */
+  --primary-hover: var(--cb-secondary);
+  --gold: var(--cb-berx);                /* gold accent for BERX */
   --gold-hover: #B8860B;
-  --text-main: #0F172A;
+  --text-main: var(--cb-text);
   --text-soft: #334155;
   --text-muted: #64748B;
   --success: #16A34A;

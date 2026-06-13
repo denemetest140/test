@@ -4,100 +4,91 @@
 Coinberx, Türk yatırımcılar için açık tema, kurumsal, premium görünümlü, mobil uygulamaya çevrilebilir mimaride bir kripto borsasıdır. CoinTR / Binance / Binance TR hissi alır ama özgün marka kalır. Sahte veri yok, gerçek borsa akışları çalışır.
 
 ## User decisions (locked)
-- Açık tema (light) varsayılan ve tek tema.
-- Renk paleti: kurumsal yeşil #16A34A (primary) + altın #D4A017 (BERX aksanı).
-- Test/CI yok — kullanıcı isteğiyle.
+- Açık tema (light) varsayılan ve admin panelden değiştirilebilir.
+- Renk paleti: kurumsal yeşil #16A34A (primary) + altın #D4A017 (BERX) — admin override edilebilir.
+- Test/CI yok — kullanıcı isteğiyle, testing agent çağrılmıyor.
 - Türkçe dil.
 - VIP / kademe yok (UI'dan tamamen kaldırıldı).
 - Fake operatör veya fake trade akışı yok.
-- Deposit referans kodu istenmez (sadece IBAN + tutar + dekont).
-- Google ile giriş kaldırıldı (sadece e-posta/şifre).
+- TRY deposit referans kodu yok.
+- Google login kaldırılmıştı; admin panelden tekrar enable toggle eklendi (flag).
 
 ## Architecture
-- Backend: FastAPI + Motor (MongoDB). Dosyalar: `server.py` (~2150 LOC), `market_data.py`, `storage.py`, `email_service.py`, `berx.py`, `networks.py`. BERX simülasyonu için asyncio loop.
-- Frontend: React 19 + Tailwind + Shadcn + lightweight-charts + Phosphor Icons + sonner.
-- Database: `users`, `wallets`, `orders`, `transactions`, `cost_basis`, `deposits`, `withdrawals`, `kyc_requests`, `crypto_withdrawals`, `crypto_deposits`, `platform_addresses`, `coin_networks`, `networks`, `internal_transfers`, `admin_activity_logs`, `support_messages`, `live_chat_sessions`, `live_chat_messages`, `berx_settings`, `berx_ticks`.
+- Backend: FastAPI + Motor (MongoDB). Dosyalar: `server.py` (~2470 LOC), `market_data.py`, `storage.py`, `email_service.py`, `berx.py`, `networks.py`.
+- Frontend: React 19 + Tailwind + Shadcn + lightweight-charts + Phosphor Icons + sonner. SettingsContext + AuthContext.
+- Database collections: `users`, `wallets`, `orders`, `transactions`, `cost_basis`, `deposits`, `withdrawals`, `kyc_requests`, `crypto_withdrawals`, `crypto_deposits`, `platform_addresses`, `coin_networks`, `networks`, `internal_transfers`, `admin_activity_logs`, `support_messages`, `live_chat_sessions`, `live_chat_messages`, `berx_settings`, `berx_ticks`, `system_settings`, **`password_resets`**, **`price_overrides`**, **`price_snapshots`**, **`seo_pages`**.
 
-## Implemented features
-(Önceki PRD bölümleri korundu — bkz. `/app/memory/CHANGELOG.md` için detaylı liste)
-- Auth: JWT e-posta+şifre, brute-force koruması, e-posta doğrulama, admin seed.
-- KYC: belge yükleme + admin onay akışı.
-- Wallet: TRY + 50 kripto + BERX, locked/available/total, P/L.
-- Trading: Market/Limit, %0,1 komisyon, ücret düzeyleri (UI'da gizli).
-- IBAN deposit (referans kodu YOK) + withdrawal.
-- Crypto deposit (admin-yönetimli adres + tx-hash claim) + crypto withdrawal.
-- Markets: 50+ coin, sparkline kolonu, sıralama, gerçek ikonlar.
-- Premium UI: Landing, Dashboard, Markets, Wallet, Deposit, Withdraw, Trade.
-- Live Chat: ziyaretçi (visitor_id) + kullanıcı, sağ-alt floating bubble, admin paneli polling tabanlı.
-- Admin: KYC, deposit/withdrawal, crypto deposit/withdrawal, networks, platform addresses, BERX (manuel + auto sim), activity logs, live chat.
-- Real Coin Icons: `lib/coinIcons.jsx` ile spothq CDN; BERX için özel altın gradient.
-- Chart cleanup fix: lightweight-charts "Object is disposed" hatası kapatıldı (disposed flag + try/catch).
+## Bu turda eklenen / değiştirilen (2026-02-13)
 
-## Code Quality refactoring (THIS SESSION — 2026-02)
-1. ✅ `is` vs `==`: Mevcut tüm `is` kullanımları `is None` ile (PEP 8 doğru), düzeltilecek bir şey yok. Linter (ruff) temiz.
-2. ✅ `create_order()` (118 satır) → 4 yardımcı fonksiyon: `_validate_order_input`, `_compute_qty_and_amount`, `_execute_market_order`, `_lock_funds_for_limit`. Ana endpoint ~40 satıra düştü.
-3. ✅ `live_chat_start()` → `_find_existing_chat_session` + `_build_new_chat_session` yardımcılarına bölündü.
-4. ✅ `get_current_user` → `_extract_bearer_token`, `_user_from_jwt`, `_user_from_session` yardımcılarına bölündü.
-5. ✅ `crypto_withdraw` → `_resolve_withdrawal_network` + `_coin_price_try` yardımcılarına bölündü.
-6. ✅ `create_transfer` → `_lookup_user_by_handle` yardımcısına bölündü.
-7. ✅ `fetch_all_tickers` (market_data.py) → `_binance_symbols_param` + `_assemble_ticker_row` yardımcılarına bölündü.
-8. ✅ `berx.py`: Tüm public fonksiyonlara type hint eklendi (Any, List, Dict, Optional).
-9. ✅ `networks.py upsert_platform_address`: 5 keyword arg yerine `PlatformAddressPayload` dataclass'ına gruplandı; caller (`server.py`) buna göre güncellendi.
-10. ✅ API davranışı 1-1 korundu (10+ curl testi: market buy/sell filled, limit open, cancel, transfer, crypto-withdraw, platform-address upsert/delete, live-chat start/message, KYC error paths).
+### Backend
+- `DEFAULT_SETTINGS` 35+ alana genişledi (brand, theme, SEO, auth toggles, price_mode).
+- `SettingsIn` 40+ field destekliyor (PATCH /admin/settings).
+- **/api/branding** (public) — Tüm whitelist edilmiş brand/theme/SEO/auth flag bundle.
+- **POST /api/auth/password/forgot** — token oluştur (32 byte url-safe), 30 dk geçerli, link e-postaya gönderilir (dev mode log'a).
+- **POST /api/auth/password/reset** — token doğrula, şifre 8+ char, bcrypt ile güncelle, token used=true.
+- **GET /api/admin/prices/overrides** — current override + son 20 snapshot.
+- **POST /api/admin/prices/bulk** — actions: `percent_all`, `percent_selected` (symbols listesi), `set_one` (sym+TRY), `reset`.
+- **POST /api/admin/prices/rollback/{snapshot_id}** — herhangi snapshot'a geri dön.
+- **/api/markets** ve **/api/markets/{symbol}** — override varsa price_try ve change_24h yeniden hesaplanıyor, `override: true` flag'i eklendi.
+- **PATCH /api/admin/users/{user_id}** — name, email, phone, role, kyc_status, account_status, email_verified.
+- **DELETE /api/admin/users/{user_id}** — soft delete (deleted=true, email anonimize, account_status=banned). Admin silinemez.
+- **GET /api/admin/users/{user_id}** — user + wallet + tx_count + chat_count.
+- **GET /api/admin/users?include_deleted=true** — silinmiş kullanıcıları da listele.
+- Login flow: deleted veya banned user 403 alır.
+- **PUT /api/admin/seo/pages** — page-level SEO upsert (slug, title, description, image).
+- **GET /api/seo/pages**, **GET /api/seo/pages/{slug}**, **DELETE /api/admin/seo/pages/{slug}**.
+- **PlatformAddressIn** + **PlatformAddressPayload** dataclass: contract_address, explorer_url, memo_required, memo_label eklendi.
+- Startup index: `password_resets.token`, `seo_pages.slug`, `price_snapshots.created_at`.
+
+### Frontend
+- **`SettingsContext`** (yeni): /api/branding'ı yükler, CSS variables (`--cb-primary`, `--cb-card`, vs.) + `document.title` + meta description / og:title / og:description / og:image / twitter:image / theme-color / favicon dinamik uygular.
+- **`MaintenanceGate`**: maintenance_mode AÇ ise admin dışındaki herkese tek-sayfa bakım ekranı gösterir.
+- **`/forgot-password`** ve **`/reset-password`** sayfaları (yeni).
+- Login sayfasında "Şifremi unuttum" link (data-testid="login-forgot").
+- Login sayfası `forgot_password_enabled` admin toggle'ına saygı duyar.
+- Yeni admin tab'ları: **Coin Fiyatları (bulkprice)**, **Site Ayarları (siteinfo)**, **Tema (theme)**, **SEO (seo)**.
+- **UsersPanel** yenilendi: arama, deleted toggle, Detay / Düzenle / Sil modalları (UserEditModal + UserDetailModal).
+- **BulkPricePanel**: yüzde girdisi, "Tüm Coinleri Uygula", "Seçilenlere Uygula", "Tek Coin Fiyat Set", "Override'ları Sıfırla", snapshot rollback geçmişi.
+- **SiteInfoPanel**: marka kimliği (logo, slogan, favicon, açıklama, footer), iletişim (e-posta, telefon), sosyal medya (Twitter/Telegram/Instagram/YouTube), 9 özellik toggle'ı (maintenance, live_chat, kyc, email_verification, email_required, google, forgot_password, registration, robots_index).
+- **ThemePanel**: 9 renk picker + 2 radius (button & card). Save → CSS variables anında uygulanır.
+- **SeoPanel**: global SEO (title, description, keywords, OG/Twitter image, canonical) + page-bazlı SEO CRUD.
+- **InfoPages** zenginleştirildi: Security, Terms, Privacy, Risk, Fees, Announcements sayfaları eklendi (Türkçe, gerçek borsa hissi).
+- App.js: SettingsProvider en üstte, ProtectedRoute admin için route, /forgot-password & /reset-password public; tüm public route'ları logged-in user da görebilir.
+
+### Önceki turdan korunan
+- `destroy is not a function` hata düzeltmesi — Admin/KYC/Transfer useEffect cleanup'ları korundu.
+- Logged-in user public landing erişimi (Root → Landing, koşullu CTA).
+- Code Quality refactor (önceki turdan): create_order, live_chat_start, get_current_user, crypto_withdraw, create_transfer, fetch_all_tickers refactor edildi; berx.py type hints; networks.py PlatformAddressPayload dataclass.
+
+## Manuel doğrulanan akışlar (bu tur)
+1. ✅ Login admin → Admin paneli 18 sekme.
+2. ✅ Ağlar sekmesi açıldı → KYC → Ağlar → Coin Adresleri → Ağlar cycle hatasız. Console temiz.
+3. ✅ Coin Fiyatları sekmesi açıldı, 52 coin görünüyor, snapshot yok.
+4. ✅ POST percent_all +5% → BTC fiyatı 2.94M → 3.09M, override flag aktif.
+5. ✅ POST set_one ETH 100000 → ETH override 100000.
+6. ✅ POST rollback → ilk snapshot'a dönüldü (empty).
+7. ✅ POST reset → tüm overrides temizlendi.
+8. ✅ Site Ayarları → logo/colors/kyc_enabled/google_login_enabled PATCH başarılı, /branding response güncellendi.
+9. ✅ Tema sekmesi → 9 color picker görünüyor, kaydet → CSS vars uygulanıyor.
+10. ✅ SEO sekmesi → global SEO + page-level SEO CRUD.
+11. ✅ /forgot-password → "Bağlantı Gönder" → success tag (data-testid="forgot-sent").
+12. ✅ Backend: password_resets token oluşturulup reset endpoint yeni şifreyi kabul etti, yeni şifre ile login OK.
+13. ✅ /admin/users/{id} PATCH (kyc_status=approved, phone, name) — başarılı.
+14. ✅ DELETE /admin/users/{id} — soft delete, email anonimleşti, login 403.
+15. ✅ /admin/users (default) silinmişi dışarıda bırakıyor; ?include_deleted=true silinmişi de getiriyor.
+16. ✅ /about, /risk, /fees public sayfaları premium görünüyor, dolu içerik, document.title default global SEO'dan geliyor.
+17. ✅ Public branding endpoint logo/colors değiştiğinde frontend'i yansıtıyor (CSS variables runtime'da güncelleniyor).
+18. ✅ Backend supervisor + frontend supervisor RUNNING, webpack compile temiz (sadece pre-existing exhaustive-deps uyarısı).
 
 ## Test credentials
 - Admin: `admin@coinberx.com` / `Admin123!`
-- Test User: `testreceiver@coinberx.com` / `Test123!` (oluşturuldu, KYC yok)
-
-## Manuel doğrulanan akışlar (refactor sonrası)
-1. ✅ Markets endpoint 50+ coin + BERX döner.
-2. ✅ Admin login → JWT döner.
-3. ✅ Wallet 17 asset listeler.
-4. ✅ Live chat: ziyaretçi start → message → admin liste, 4 session göründü.
-5. ✅ Admin platform-addresses PUT/GET/DELETE çalışıyor.
-6. ✅ Coin networks USDT için TRC20 adres dolu, ERC20/BEP20 boş.
-7. ✅ BERX price endpoint çalışıyor.
-8. ✅ Settings public döner.
-9. ✅ Trade market BUY 100 TRY BTC → filled, fee 0.075 TRY.
-10. ✅ Trade limit BUY → open, cancel → ok.
-11. ✅ Trade market SELL 0.0001 BTC → filled.
-12. ✅ Crypto withdrawal USDT TRC20 10 → pending, fee_coin hesaplandı.
-13. ✅ Transfer 0.0001 BTC alıcıya → fee 5e-8.
-14. ✅ Validation: invalid side / yetersiz bakiye / alıcı bulunamadı / kendine transfer — hepsi 400 doğru hata.
-15. ✅ Landing page yüklendi, canlı destek bubble görünür.
-16. ✅ Backend supervisor logları temiz.
+- Test User (soft deleted in this turn — recreate if test gerekirse): `testreceiver@coinberx.com`
 
 ## Pending / Backlog
 - WebSocket: Şu an polling. Ölçeklenince socket.io/SSE.
 - Gerçek blockchain entegrasyonu: Crypto deposit/withdraw admin manuel onaylı (MVP).
 - Match engine: limit emirler şu an sırada bekliyor, otomatik eşleşme yok.
-- Password reset UI premium tasarımı.
-- Mobil bottom-sheet detayları.
-
-## Bug fix — Admin Networks "destroy is not a function" (2026-02-13)
-**Root cause:** `useEffect(load, [])` deseni, `load = () => api.get(...).then(...)` arrow fonksiyonu Promise döndürürken kullanılıyordu. React, effect callback'in dönüş değerini "cleanup function" olarak yorumladığı için unmount'ta `promise()` çağırıp `TypeError: destroy is not a function` fırlatıyordu. Strict Mode çift-mount'ta her sayfa girişinde hata oluşuyordu.
-
-**Düzeltme (Admin.jsx + KYC.jsx + Transfer.jsx):**
-- `useEffect(load, [])` → `useEffect(() => { load(); }, [])` (4 yer: Admin.NetworksPanel, Admin.CryptoWithdrawalsPanel, KYC, Transfer)
-- `useEffect(() => setLocal(x), [x])` → `useEffect(() => { setLocal(x); }, [x])` (3 yer, defensive)
-- `load` fonksiyonu artık `then().catch()` chain'i içeriyor; brace ile sarıldı, return undefined.
-
-**Manuel test (Playwright):**
-- Admin login → /admin → Ağlar sekmesi → KYC → Ağlar → Coin Adresleri → Ağlar. Hepsi hatasız.
-- Console temiz, `destroy is not a function` / `TypeError` yok.
-
-**Logged-in user için public landing erişimi (2026-02-13)**
-- `App.js Root()` artık her zaman Landing gösteriyor (giriş yapanı /dashboard'a zorlamıyor).
-- `Landing.jsx` `useAuth()` ile durum bilir:
-  - Sağ üst: Ziyaretçi → "Giriş Yap / Hesap Aç" · Giriş yapan → "Cüzdanım / Panele Git"
-  - Hero CTA: Ziyaretçi → "Ücretsiz Hesap Aç / Hemen Al-Sat" · Giriş yapan → "Hemen Al-Sat / Hesap Panelim"
-  - Alt CTA: Ziyaretçi → "Ücretsiz Hesap Aç" · Giriş yapan → "Hemen İşlem Yap"
-  - Nav linkleri "Spot İşlem / Kolay Al-Sat" → giriş yapana `/trade/BTC`, ziyaretçiye `/login`.
-- `/about`, `/blog`, `/career`, `/press`, `/help`, `/faq`, `/contact` zaten public (Gated değildi). Logged-in kullanıcı sorunsuz erişebiliyor.
-
-**Değişen dosyalar:**
-- `/app/frontend/src/pages/Admin.jsx`
-- `/app/frontend/src/pages/KYC.jsx`
-- `/app/frontend/src/pages/Transfer.jsx`
-- `/app/frontend/src/App.js` (Root component davranışı)
-- `/app/frontend/src/pages/Landing.jsx` (useAuth + 4 CTA bloğu koşullu)
+- Google login: backend toggle var ama OAuth callback şu an 410 döner. Kullanıcı OAuth client kurarsa enable edilecek.
+- Logo/favicon yükleme: şu an URL girilerek çalışıyor. Asıl dosya upload S3/storage entegrasyonu eklenebilir.
+- BERX management UI ileri (admin override sim/manual/hybrid mode toggle): backend'de zaten var, admin BERX panelinde daha kompakt UI yapılabilir.
+- Mobile bottom-sheet detay polish.
