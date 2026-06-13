@@ -6,10 +6,12 @@ import { api, formatTRY, errToStr } from "../lib/api";
 import { toast } from "sonner";
 import { WarningCircle, CheckCircle, Clock, XCircle } from "@phosphor-icons/react";
 import { CoinIcon } from "../lib/coinIcons.jsx";
+import { usePageSeo } from "../contexts/SettingsContext";
 
 const COINS = ["BTC","ETH","USDT","BNB","SOL","XRP","ADA","DOGE","TRX","AVAX","MATIC","LINK","DOT","LTC","SHIB","TON","BERX"];
 
 export default function Withdraw() {
+  usePageSeo("withdraw");
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") || "try";
   return (

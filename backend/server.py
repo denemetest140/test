@@ -6,6 +6,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import os
+import re
 import uuid
 import secrets
 import logging
@@ -287,6 +288,10 @@ class SettingsIn(BaseModel):
     google_login_enabled: Optional[bool] = None
     forgot_password_enabled: Optional[bool] = None
     registration_enabled: Optional[bool] = None
+    # Google OAuth
+    google_client_id: Optional[str] = None
+    google_client_secret: Optional[str] = None
+    google_redirect_uri: Optional[str] = None
     # Brand
     site_name: Optional[str] = None
     site_slogan: Optional[str] = None
@@ -428,6 +433,9 @@ DEFAULT_SETTINGS = {
     "email_verification_enabled": True,
     "email_verification_required": False,
     "google_login_enabled": False,
+    "google_client_id": "",
+    "google_client_secret": "",
+    "google_redirect_uri": "",
     "forgot_password_enabled": True,
     "registration_enabled": True,
     # Brand / site identity
@@ -483,6 +491,7 @@ PUBLIC_BRANDING_KEYS = {
     "og_image", "twitter_image", "canonical_url", "robots_index",
     "pwa_theme_color", "pwa_background_color",
     "kyc_enabled", "email_verification_enabled", "google_login_enabled",
+    "google_client_id", "google_redirect_uri",
     "forgot_password_enabled", "registration_enabled",
 }
 
@@ -661,10 +670,37 @@ async def resend_code(data: ResendCodeIn):
     return {"ok": True}
 
 
-# Google (Emergent) auth callback — REMOVED: sadece e-posta+şifre desteği kaldı
+# Google OAuth — config-driven
+@api.get("/auth/google/status")
+async def google_status():
+    """Public: is Google login both enabled by admin AND properly configured?"""
+    s = await get_settings()
+    enabled = bool(s.get("google_login_enabled"))
+    configured = bool(s.get("google_client_id")) and bool(s.get("google_redirect_uri"))
+    return {
+        "enabled": enabled,
+        "configured": configured,
+        "available": enabled and configured,
+        "client_id": s.get("google_client_id") if (enabled and configured) else "",
+        "redirect_uri": s.get("google_redirect_uri") if (enabled and configured) else "",
+    }
+
+
 @api.post("/auth/google/session")
-async def google_session_disabled():
-    raise HTTPException(status_code=410, detail="Google ile giriş kaldırıldı")
+async def google_session(payload: dict = None):
+    """Verify Google OAuth code/token if configured. Otherwise return 410.
+
+    Real Google token verification requires aiohttp+google-auth which are not yet
+    installed by user; once admin configures client_id/secret and we have the
+    library, this endpoint will exchange the code for an id_token and create a
+    Coinberx session. For now we return a clear configuration-aware error.
+    """
+    s = await get_settings()
+    if not s.get("google_login_enabled"):
+        raise HTTPException(status_code=410, detail="Google ile giriş yönetici tarafından devre dışı")
+    if not s.get("google_client_id") or not s.get("google_client_secret"):
+        raise HTTPException(status_code=503, detail="Google istemci ayarları eksik (client_id/secret). Yönetici paneli > Site Ayarları'ndan tamamlayın.")
+    raise HTTPException(status_code=501, detail="Google OAuth callback uygulaması bekleniyor. İstemci ayarları kaydedildi ancak doğrulama altyapısı henüz aktif değil.")
 
 
 # -------------- Profile --------------
@@ -2202,6 +2238,185 @@ async def admin_live_chat_stats(admin: dict = Depends(require_admin)):
     }
 
 
+# -------------- Limit order matching engine --------------
+async def _match_single_order(order: dict, current_price: float) -> bool:
+    """Try to fill an open limit order against current market price. Returns True if filled."""
+    sym = order["symbol"]
+    side = order["side"]
+    limit_price = float(order.get("price") or 0)
+    qty = float(order.get("quantity") or 0) - float(order.get("filled_qty") or 0)
+    if qty <= 0 or limit_price <= 0:
+        return False
+
+    triggered = (side == "buy" and current_price <= limit_price) or (side == "sell" and current_price >= limit_price)
+    if not triggered:
+        return False
+
+    fill_price = current_price  # take the better-for-user price
+    amount = qty * fill_price
+    settings = await get_settings()
+    fee_rate = float(settings.get("trading_fee", 0.001))
+    fee = amount * fee_rate
+
+    if side == "buy":
+        # release reserved TRY (we locked (amount + fee) at limit_price * qty)
+        reserved = float(order.get("quantity") or 0) * limit_price * (1 + fee_rate)
+        actual_cost = amount + fee
+        refund = max(0.0, reserved - actual_cost)
+        await db.wallets.update_one(
+            {"user_id": order["user_id"]},
+            {"$inc": {
+                "locked.TRY": -reserved,
+                "balances.TRY": refund,
+                f"balances.{sym}": qty,
+            }},
+        )
+        await db.cost_basis.update_one(
+            {"user_id": order["user_id"]}, {"$inc": {"invested_try": actual_cost}}, upsert=True
+        )
+    else:
+        # sell: release locked coin, credit TRY (after fee)
+        credit = amount - fee
+        await db.wallets.update_one(
+            {"user_id": order["user_id"]},
+            {"$inc": {
+                f"locked.{sym}": -qty,
+                "balances.TRY": credit,
+            }},
+        )
+        await db.cost_basis.update_one(
+            {"user_id": order["user_id"]}, {"$inc": {"invested_try": -credit}}, upsert=True
+        )
+
+    await db.orders.update_one(
+        {"order_id": order["order_id"]},
+        {"$set": {
+            "status": "filled",
+            "filled_qty": qty + float(order.get("filled_qty") or 0),
+            "filled_at": now_iso(),
+            "fill_price": fill_price,
+            "fee_try": fee,
+        }},
+    )
+    await db.transactions.insert_one({
+        "user_id": order["user_id"],
+        "type": "trade",
+        "side": side,
+        "symbol": sym,
+        "quantity": qty,
+        "price": fill_price,
+        "amount_try": amount,
+        "fee_try": fee,
+        "order_id": order["order_id"],
+        "matched_from": "limit_engine",
+        "created_at": now_iso(),
+    })
+    await push_notification(
+        order["user_id"],
+        "Limit Emriniz Gerçekleşti",
+        f"{sym} {side.upper()} {qty:.8f} adet @ {fill_price:.4f} TL fiyattan dolduruldu.",
+        "trade",
+    )
+    return True
+
+
+async def run_limit_matching_cycle():
+    """Iterate open limit orders and fill those whose price has been touched."""
+    open_orders = await db.orders.find({"status": "open", "order_type": "limit"}).to_list(500)
+    if not open_orders:
+        return 0
+    tickers = await mkt.fetch_all_tickers()
+    overrides = await get_price_overrides()
+    prices = {t["symbol"]: overrides.get(t["symbol"], t["price_try"]) for t in tickers}
+    try:
+        berx_price = await berx.get_berx_price(db)
+        prices["BERX"] = berx_price
+    except Exception:
+        pass
+    filled = 0
+    for o in open_orders:
+        cur = prices.get(o["symbol"])
+        if not cur:
+            continue
+        if await _match_single_order(o, float(cur)):
+            filled += 1
+    return filled
+
+
+async def _limit_matching_loop():
+    while True:
+        try:
+            await asyncio.sleep(6)
+            await run_limit_matching_cycle()
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.error("limit_matching_loop error: %s", exc)
+
+
+@api.post("/admin/limit-engine/tick")
+async def admin_force_match(admin: dict = Depends(require_admin)):
+    """Force a matching cycle (debug/admin)."""
+    n = await run_limit_matching_cycle()
+    return {"filled": n}
+
+
+# -------------- Media upload (admin) --------------
+ALLOWED_MEDIA_MIME = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon", "image/gif"}
+MAX_MEDIA_BYTES = 4 * 1024 * 1024
+
+
+@api.post("/admin/media/upload")
+async def admin_media_upload(
+    request: Request,
+    purpose: str = Form("brand"),  # brand | logo | favicon | coin | hero | banner
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_admin),
+):
+    ct = (file.content_type or "").lower()
+    if ct not in ALLOWED_MEDIA_MIME:
+        raise HTTPException(status_code=400, detail=f"Desteklenmeyen tip: {ct}")
+    data = await file.read()
+    if len(data) > MAX_MEDIA_BYTES:
+        raise HTTPException(status_code=413, detail=f"Dosya çok büyük (max {MAX_MEDIA_BYTES // 1024 // 1024} MB)")
+    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", file.filename or "media")
+    object_path = f"media/{purpose}/{new_id('m_')}_{safe_name}"
+    try:
+        put_object(object_path, data, ct)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=f"Storage hatası: {exc}")
+    api_url = f"/api/media/{object_path}"
+    await db.media_uploads.insert_one({
+        "object_path": object_path,
+        "url": api_url,
+        "purpose": purpose,
+        "filename": safe_name,
+        "size": len(data),
+        "content_type": ct,
+        "uploaded_by": admin["user_id"],
+        "created_at": now_iso(),
+    })
+    await log_admin_action(admin, "media.upload", "media", object_path, {"purpose": purpose}, request)
+    return {"ok": True, "url": api_url, "object_path": object_path, "filename": safe_name}
+
+
+@api.get("/admin/media")
+async def admin_media_list(purpose: Optional[str] = None, admin: dict = Depends(require_admin)):
+    q = {"purpose": purpose} if purpose else {}
+    rows = await db.media_uploads.find(q, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    return rows
+
+
+@api.get("/media/{object_path:path}")
+async def public_media(object_path: str):
+    """Public endpoint that proxies uploaded media bytes from emergent storage."""
+    try:
+        data, ct = get_object(object_path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
+
+
 # -------------- Public --------------
 @api.get("/settings")
 async def public_settings():
@@ -2558,6 +2773,7 @@ async def on_startup():
     await nw.seed_networks(db)
     # start BERX auto-simulation loop (no-op until enabled by admin)
     app.state.berx_sim_task = asyncio.create_task(_berx_simulation_loop())
+    app.state.limit_match_task = asyncio.create_task(_limit_matching_loop())
 
     # seed admin
     admin_email = os.environ.get("ADMIN_EMAIL")
@@ -2591,11 +2807,12 @@ async def on_startup():
 
 @app.on_event("shutdown")
 async def on_shutdown():
-    task = getattr(app.state, "berx_sim_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except Exception:
-            pass
+    for attr in ("berx_sim_task", "limit_match_task"):
+        task = getattr(app.state, attr, None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except Exception:
+                pass
     mongo_client.close()

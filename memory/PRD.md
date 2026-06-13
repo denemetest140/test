@@ -1,94 +1,107 @@
 # Coinberx — Turkish Crypto Exchange (PRD)
 
 ## Vision
-Coinberx, Türk yatırımcılar için açık tema, kurumsal, premium görünümlü, mobil uygulamaya çevrilebilir mimaride bir kripto borsasıdır. CoinTR / Binance / Binance TR hissi alır ama özgün marka kalır. Sahte veri yok, gerçek borsa akışları çalışır.
-
-## User decisions (locked)
-- Açık tema (light) varsayılan ve admin panelden değiştirilebilir.
-- Renk paleti: kurumsal yeşil #16A34A (primary) + altın #D4A017 (BERX) — admin override edilebilir.
-- Test/CI yok — kullanıcı isteğiyle, testing agent çağrılmıyor.
-- Türkçe dil.
-- VIP / kademe yok (UI'dan tamamen kaldırıldı).
-- Fake operatör veya fake trade akışı yok.
-- TRY deposit referans kodu yok.
-- Google login kaldırılmıştı; admin panelden tekrar enable toggle eklendi (flag).
+Coinberx, Türk yatırımcılar için açık tema, kurumsal, premium görünümlü, mobil uygulamaya çevrilebilir mimaride bir kripto borsasıdır. Sahte veri yok, gerçek borsa akışları çalışır.
 
 ## Architecture
-- Backend: FastAPI + Motor (MongoDB). Dosyalar: `server.py` (~2470 LOC), `market_data.py`, `storage.py`, `email_service.py`, `berx.py`, `networks.py`.
-- Frontend: React 19 + Tailwind + Shadcn + lightweight-charts + Phosphor Icons + sonner. SettingsContext + AuthContext.
-- Database collections: `users`, `wallets`, `orders`, `transactions`, `cost_basis`, `deposits`, `withdrawals`, `kyc_requests`, `crypto_withdrawals`, `crypto_deposits`, `platform_addresses`, `coin_networks`, `networks`, `internal_transfers`, `admin_activity_logs`, `support_messages`, `live_chat_sessions`, `live_chat_messages`, `berx_settings`, `berx_ticks`, `system_settings`, **`password_resets`**, **`price_overrides`**, **`price_snapshots`**, **`seo_pages`**.
+- Backend: FastAPI + Motor (MongoDB). Dosyalar: `server.py` (~2830 LOC), `market_data.py`, `storage.py`, `email_service.py`, `berx.py`, `networks.py`.
+- Frontend: React 19 + Tailwind + Shadcn + lightweight-charts + Phosphor + sonner. AuthContext + SettingsContext (yeni).
+- Database collections: users, wallets, orders, transactions, cost_basis, deposits, withdrawals, kyc_requests, crypto_withdrawals, crypto_deposits, platform_addresses, coin_networks, networks, internal_transfers, admin_activity_logs, support_messages, live_chat_sessions, live_chat_messages, berx_settings, berx_ticks, system_settings, password_resets, price_overrides, price_snapshots, seo_pages, **media_uploads**.
+- Background loops: BERX simulation (10s), **limit matching engine (6s)**.
+
+## Implemented features (cumulative)
+
+### Auth & Users
+- E-posta+şifre JWT, brute-force koruması, e-posta doğrulama (kod), şifremi unuttum (token + 30 dk).
+- KYC pending/approved/rejected akışı (admin onaylı).
+- Admin: kullanıcı CRUD — view, edit (name/email/phone/role/kyc/account_status/email_verified), soft delete (banned + email anonimize), include_deleted listesi.
+- Soft-deleted / banned kullanıcı login bloğu.
+- Google OAuth: admin panelden client_id / client_secret / redirect_uri ayarı; `/auth/google/status` available/configured/enabled bilgisi; Login ekranında Google butonu sadece `available=true` ise görünür.
+
+### Trading
+- Spot al-sat: market buy/sell instant fill (Binance fiyatından).
+- **Limit emir motoru (yeni)**: 6 saniye'de bir background loop tüm açık limit emirleri tarar; BUY price ≤ market ise veya SELL price ≥ market ise atomic fill, locked balance düşülür, fee hesaplanır, transaction kaydı atılır, push notification gönderilir. Force-tick endpoint admin için. Partial fill desteklenir (filled_qty).
+- Limit cancel: locked balance geri yatırılır.
+- BERX: admin panelden manuel fiyat, otomatik simülasyon, push tick. Spot al-sat çalışır.
+- Coin override mode: admin tüm/seçili coinler için yüzde uygula, tek coin fiyat ayarla, reset; snapshot rollback geçmişi.
+
+### Wallet / Deposits / Withdrawals
+- TRY/USDT/52 coin/BERX bakiyeleri, locked/available/total, P/L (cost basis).
+- TRY yatırma: tutar + dekont (REFERANS KODU YOK), admin onaylı.
+- TRY çekme: IBAN + admin onaylı.
+- Kripto yatırma: admin yönetimli adres (per coin + network), TX hash claim.
+- Kripto çekme: per-coin per-network fee + min, admin yönetimli.
+
+### Networks & Addresses
+- Coin networks (TRC20, ERC20, BEP20, Tron, Ethereum, BNB, Polygon, Solana, Avalanche, Arbitrum, Optimism, Base) admin yönetimli.
+- Platform addresses (admin paneli): address, warning, min_deposit, deposit/withdraw enabled, **contract_address, explorer_url, memo_required, memo_label** (yeni).
+
+### Live Chat
+- Visitor (visitor_id) + auth kullanıcı destekli.
+- Sağ alt floating bubble (settings.live_chat_enabled toggle).
+- Admin paneli polling 4s (yeni daha hızlı), unread badge, status açık/beklemede/kapalı.
+
+### Site Settings / Theme / SEO
+- **35+ alanlı sistem ayarları** (admin paneli):
+  - Marka: site_name, slogan, açıklama, logo_url, favicon_url, footer.
+  - İletişim: contact_email, contact_phone, 4 sosyal medya.
+  - Auth toggles: maintenance_mode, live_chat_enabled, kyc_enabled, email_verification_enabled/required, google_login_enabled, forgot_password_enabled, registration_enabled, robots_index.
+  - Google: client_id, client_secret, redirect_uri.
+  - Tema: primary/secondary/accent/BERX/bg/card/text + button/card radius + PWA renkleri.
+  - SEO: global title/desc/keywords/og_image/twitter_image/canonical.
+- **`/api/branding` public bundle** — frontend bootstrap'ta CSS variables + meta tags + favicon + theme color dinamik uygulanır.
+- **Per-page SEO**: `/api/admin/seo/pages` CRUD; frontend `usePageSeo(slug)` hook ile her sayfa kendi başlık+description+og_image'ını uygular. 17 sayfa için seed edildi (home, wallet, trade, deposit, withdraw, about, fees, risk, help, faq, contact, security, blog, announcements, terms, privacy, markets).
+
+### Media Upload (yeni)
+- **`POST /api/admin/media/upload`**: multipart, sadece image/* + ico, max 4MB, güvenli isim, admin yönetimli, emergent storage'a yazar.
+- **`GET /api/media/{path}`**: public proxy, 24h cache.
+- Admin Site Ayarları'nda Logo + Favicon alanları yanında **"Dosya Yükle"** butonu.
+
+### Live Activity (canlı akış)
+- 4 saniyelik polling (önceki 12s'den). Gerçek trade'leri (admin override + limit engine fill'leri) gösterir.
+
+### Public pages
+- Hakkımızda, Blog, Kariyer, Basın, Yardım, SSS, İletişim, Güvenlik, Kullanım Şartları, Gizlilik, Risk Bildirimi, Ücretler, Duyurular — hepsi premium Türkçe içerikle.
+- Giriş yapan kullanıcı tüm public sayfalara erişebilir.
 
 ## Bu turda eklenen / değiştirilen (2026-02-13)
 
-### Backend
-- `DEFAULT_SETTINGS` 35+ alana genişledi (brand, theme, SEO, auth toggles, price_mode).
-- `SettingsIn` 40+ field destekliyor (PATCH /admin/settings).
-- **/api/branding** (public) — Tüm whitelist edilmiş brand/theme/SEO/auth flag bundle.
-- **POST /api/auth/password/forgot** — token oluştur (32 byte url-safe), 30 dk geçerli, link e-postaya gönderilir (dev mode log'a).
-- **POST /api/auth/password/reset** — token doğrula, şifre 8+ char, bcrypt ile güncelle, token used=true.
-- **GET /api/admin/prices/overrides** — current override + son 20 snapshot.
-- **POST /api/admin/prices/bulk** — actions: `percent_all`, `percent_selected` (symbols listesi), `set_one` (sym+TRY), `reset`.
-- **POST /api/admin/prices/rollback/{snapshot_id}** — herhangi snapshot'a geri dön.
-- **/api/markets** ve **/api/markets/{symbol}** — override varsa price_try ve change_24h yeniden hesaplanıyor, `override: true` flag'i eklendi.
-- **PATCH /api/admin/users/{user_id}** — name, email, phone, role, kyc_status, account_status, email_verified.
-- **DELETE /api/admin/users/{user_id}** — soft delete (deleted=true, email anonimize, account_status=banned). Admin silinemez.
-- **GET /api/admin/users/{user_id}** — user + wallet + tx_count + chat_count.
-- **GET /api/admin/users?include_deleted=true** — silinmiş kullanıcıları da listele.
-- Login flow: deleted veya banned user 403 alır.
-- **PUT /api/admin/seo/pages** — page-level SEO upsert (slug, title, description, image).
-- **GET /api/seo/pages**, **GET /api/seo/pages/{slug}**, **DELETE /api/admin/seo/pages/{slug}**.
-- **PlatformAddressIn** + **PlatformAddressPayload** dataclass: contract_address, explorer_url, memo_required, memo_label eklendi.
-- Startup index: `password_resets.token`, `seo_pages.slug`, `price_snapshots.created_at`.
+### Backend (server.py + networks.py)
+- **Limit matching engine**: `_match_single_order`, `run_limit_matching_cycle`, `_limit_matching_loop` background task, admin force-tick endpoint.
+- **Google OAuth config**: SettingsIn + DEFAULT_SETTINGS'e client_id/secret/redirect_uri eklendi; `/auth/google/status` yeni; `/auth/google/session` config-aware (410/503/501 net hata mesajları).
+- **Media upload**: ALLOWED_MEDIA_MIME, MAX_MEDIA_BYTES, `POST /admin/media/upload`, `GET /admin/media`, `GET /media/{path}` public proxy.
+- PUBLIC_BRANDING_KEYS güncellendi (google_client_id, google_redirect_uri public, secret değil).
 
 ### Frontend
-- **`SettingsContext`** (yeni): /api/branding'ı yükler, CSS variables (`--cb-primary`, `--cb-card`, vs.) + `document.title` + meta description / og:title / og:description / og:image / twitter:image / theme-color / favicon dinamik uygular.
-- **`MaintenanceGate`**: maintenance_mode AÇ ise admin dışındaki herkese tek-sayfa bakım ekranı gösterir.
-- **`/forgot-password`** ve **`/reset-password`** sayfaları (yeni).
-- Login sayfasında "Şifremi unuttum" link (data-testid="login-forgot").
-- Login sayfası `forgot_password_enabled` admin toggle'ına saygı duyar.
-- Yeni admin tab'ları: **Coin Fiyatları (bulkprice)**, **Site Ayarları (siteinfo)**, **Tema (theme)**, **SEO (seo)**.
-- **UsersPanel** yenilendi: arama, deleted toggle, Detay / Düzenle / Sil modalları (UserEditModal + UserDetailModal).
-- **BulkPricePanel**: yüzde girdisi, "Tüm Coinleri Uygula", "Seçilenlere Uygula", "Tek Coin Fiyat Set", "Override'ları Sıfırla", snapshot rollback geçmişi.
-- **SiteInfoPanel**: marka kimliği (logo, slogan, favicon, açıklama, footer), iletişim (e-posta, telefon), sosyal medya (Twitter/Telegram/Instagram/YouTube), 9 özellik toggle'ı (maintenance, live_chat, kyc, email_verification, email_required, google, forgot_password, registration, robots_index).
-- **ThemePanel**: 9 renk picker + 2 radius (button & card). Save → CSS variables anında uygulanır.
-- **SeoPanel**: global SEO (title, description, keywords, OG/Twitter image, canonical) + page-bazlı SEO CRUD.
-- **InfoPages** zenginleştirildi: Security, Terms, Privacy, Risk, Fees, Announcements sayfaları eklendi (Türkçe, gerçek borsa hissi).
-- App.js: SettingsProvider en üstte, ProtectedRoute admin için route, /forgot-password & /reset-password public; tüm public route'ları logged-in user da görebilir.
-
-### Önceki turdan korunan
-- `destroy is not a function` hata düzeltmesi — Admin/KYC/Transfer useEffect cleanup'ları korundu.
-- Logged-in user public landing erişimi (Root → Landing, koşullu CTA).
-- Code Quality refactor (önceki turdan): create_order, live_chat_start, get_current_user, crypto_withdraw, create_transfer, fetch_all_tickers refactor edildi; berx.py type hints; networks.py PlatformAddressPayload dataclass.
+- `SettingsContext` → `usePageSeo(slug)` hook eklendi.
+- `InfoPage` slug parametresi alıyor, `usePageSeo` çağırıyor; tüm 13 info sayfasında slug verildi.
+- Markets, Wallet, Trade, Deposit, Withdraw, Landing → `usePageSeo` eklendi.
+- Admin SiteInfoPanel: Logo/Favicon "Dosya Yükle" + Google OAuth Yapılandırma kartı (client_id/secret/redirect_uri + canlı durum badge'i).
+- Admin AddressesPanel: Contract Address, Explorer URL, Memo Required, Memo Label alanları eklendi.
+- Login.jsx: `/auth/google/status` ile **koşullu Google butonu** (sadece available=true ise; Google logosu + accounts.google.com OAuth URL'i hazır).
+- LiveActivity polling 12s → 4s.
+- SupportWidget polling 8s → 4s.
 
 ## Manuel doğrulanan akışlar (bu tur)
-1. ✅ Login admin → Admin paneli 18 sekme.
-2. ✅ Ağlar sekmesi açıldı → KYC → Ağlar → Coin Adresleri → Ağlar cycle hatasız. Console temiz.
-3. ✅ Coin Fiyatları sekmesi açıldı, 52 coin görünüyor, snapshot yok.
-4. ✅ POST percent_all +5% → BTC fiyatı 2.94M → 3.09M, override flag aktif.
-5. ✅ POST set_one ETH 100000 → ETH override 100000.
-6. ✅ POST rollback → ilk snapshot'a dönüldü (empty).
-7. ✅ POST reset → tüm overrides temizlendi.
-8. ✅ Site Ayarları → logo/colors/kyc_enabled/google_login_enabled PATCH başarılı, /branding response güncellendi.
-9. ✅ Tema sekmesi → 9 color picker görünüyor, kaydet → CSS vars uygulanıyor.
-10. ✅ SEO sekmesi → global SEO + page-level SEO CRUD.
-11. ✅ /forgot-password → "Bağlantı Gönder" → success tag (data-testid="forgot-sent").
-12. ✅ Backend: password_resets token oluşturulup reset endpoint yeni şifreyi kabul etti, yeni şifre ile login OK.
-13. ✅ /admin/users/{id} PATCH (kyc_status=approved, phone, name) — başarılı.
-14. ✅ DELETE /admin/users/{id} — soft delete, email anonimleşti, login 403.
-15. ✅ /admin/users (default) silinmişi dışarıda bırakıyor; ?include_deleted=true silinmişi de getiriyor.
-16. ✅ /about, /risk, /fees public sayfaları premium görünüyor, dolu içerik, document.title default global SEO'dan geliyor.
-17. ✅ Public branding endpoint logo/colors değiştiğinde frontend'i yansıtıyor (CSS variables runtime'da güncelleniyor).
-18. ✅ Backend supervisor + frontend supervisor RUNNING, webpack compile temiz (sadece pre-existing exhaustive-deps uyarısı).
+1. ✅ **Limit BUY @ 1.05x market** → tick → **filled at market price** (better-for-user), wallet TRY-locked düşüldü, BTC eklendi.
+2. ✅ **Limit SELL @ 10x market** → open (tetiklemedi, doğru).
+3. ✅ **Google status**: default disabled → configured edildikten sonra available=true; client_id branding'a yansıdı; **client_secret YANSIMADI** (güvenlik); session endpoint config-aware 501 döndü.
+4. ✅ **Media upload**: PNG kabul edildi (1x1 test), public proxy 69 byte döndü, content-type doğru; text/plain reddedildi.
+5. ✅ Admin > Site Ayarları > Logo/Favicon "Dosya Yükle" butonu görünür.
+6. ✅ Admin > Coin Adresleri > Contract/Explorer/Memo alanları görünür.
+7. ✅ Admin > Ağlar destroy hatası YOK (cycle 3x).
+8. ✅ **Page-level SEO**: 17 sayfa seed; tarayıcı title değişiyor → `/` → "Coinberx", `/wallet` → "Cüzdanım", `/trade/BTC` → "Spot İşlem", `/deposit` → "Para Yatırma", `/fees` → "Ücretler", `/risk` → "Risk Bildirimi", `/about` → "Hakkımızda".
+9. ✅ Login: Google disabled → **butonu YOK**; "Şifremi unuttum" link mevcut.
+10. ✅ **Premium UI** doğrulandı: Markets (Favoriler/Spot + TRY/USDT/BERX tab + sparkline + ikon), Wallet (Available/Locked/Total/TRY Değeri/24s + ikon), Deposit (sol form / sağ rehber, referans kodu YOK), Trade (chart + emir defteri + son işlemler).
+11. ✅ **Canlı işlem akışı** sağ altta 4s polling ile sürekli güncelleniyor — gerçek admin trade'leri yansıyor.
+12. ✅ Tüm bugün konsol logları **temiz** (`destroy is not a function` yok, TypeError yok).
+13. ✅ Backend supervisor + frontend supervisor RUNNING.
 
 ## Test credentials
 - Admin: `admin@coinberx.com` / `Admin123!`
-- Test User (soft deleted in this turn — recreate if test gerekirse): `testreceiver@coinberx.com`
 
-## Pending / Backlog
-- WebSocket: Şu an polling. Ölçeklenince socket.io/SSE.
-- Gerçek blockchain entegrasyonu: Crypto deposit/withdraw admin manuel onaylı (MVP).
-- Match engine: limit emirler şu an sırada bekliyor, otomatik eşleşme yok.
-- Google login: backend toggle var ama OAuth callback şu an 410 döner. Kullanıcı OAuth client kurarsa enable edilecek.
-- Logo/favicon yükleme: şu an URL girilerek çalışıyor. Asıl dosya upload S3/storage entegrasyonu eklenebilir.
-- BERX management UI ileri (admin override sim/manual/hybrid mode toggle): backend'de zaten var, admin BERX panelinde daha kompakt UI yapılabilir.
-- Mobile bottom-sheet detay polish.
+## Pending / Backlog (dürüstçe kalan)
+- **WebSocket canlı destek**: hâlâ polling (4s'ye düşürüldü, gerçek-zamana yakın). True WebSocket sonraki adım.
+- **Gerçek Google OAuth callback library entegrasyonu**: client_id/secret ayar altyapısı tamam, fakat code → id_token doğrulama için `google-auth` / `aiohttp` library kurulum + callback handler bekliyor. Admin "Yapılandırma Eksik / Tamam" durumu görür ve uyarılır.
+- **Gerçek blockchain entegrasyonu**: crypto deposit/withdraw admin manuel onaylı (MVP).
+- **Match engine: FIFO order book**: şu an market-tetikleyici model (BUY price ≤ market fill). Birden çok kullanıcı arası gerçek karşılıklı eşleşme için ileride iyileştirilebilir.

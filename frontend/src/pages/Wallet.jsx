@@ -5,8 +5,10 @@ import { api, formatTRY, formatNumber, formatPct } from "../lib/api";
 import { Link } from "react-router-dom";
 import { Eye, EyeSlash, ArrowDown, ArrowUp, PaperPlaneTilt, MagnifyingGlass, ShoppingBagOpen, Wallet as WalletIcon, Receipt, ArrowsLeftRight, Clock, House } from "@phosphor-icons/react";
 import { CoinIcon } from "../lib/coinIcons.jsx";
+import { usePageSeo } from "../contexts/SettingsContext";
 
 export default function Wallet() {
+  usePageSeo("wallet");
   const [view, setView] = useState("overview"); // overview | spot | deposits | withdrawals | transfers | history
   const [hide, setHide] = useState(false);
   const [w, setW] = useState(null);

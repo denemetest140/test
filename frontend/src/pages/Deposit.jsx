@@ -6,10 +6,12 @@ import { api, formatTRY, errToStr } from "../lib/api";
 import { Copy, Upload, ArrowLineDown, WarningCircle, CheckCircle, Clock, XCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { CoinIcon } from "../lib/coinIcons.jsx";
+import { usePageSeo } from "../contexts/SettingsContext";
 
 const COINS = ["BTC","ETH","USDT","BNB","SOL","XRP","ADA","DOGE","TRX","AVAX","MATIC","LINK","DOT","LTC","SHIB","TON","BERX"];
 
 export default function Deposit() {
+  usePageSeo("deposit");
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") || "try"; // try | crypto
 

@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "@phosphor-icons/react";
+import { usePageSeo } from "../contexts/SettingsContext";
 
-export default function InfoPage({ title, subtitle, children }) {
+export default function InfoPage({ title, subtitle, slug, children }) {
+  usePageSeo(slug);
   return (
     <div className="min-h-screen bg-[#F7F9FC] text-[#0F172A]">
       <header className="border-b border-[#E2E8F0]">

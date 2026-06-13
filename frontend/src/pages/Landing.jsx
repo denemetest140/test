@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, formatTRY, formatPct } from "../lib/api";
 import { CoinIcon } from "../lib/coinIcons.jsx";
 import { useAuth } from "../contexts/AuthContext";
+import { usePageSeo } from "../contexts/SettingsContext";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -293,6 +294,7 @@ function BerxSpotlightCard({ sparks }) {
 
 // --- Main Landing -----------------------------------------------------------
 export default function Landing() {
+  usePageSeo("home");
   const { user } = useAuth();
   const [coins, setCoins] = useState([]);
   const [sparks, setSparks] = useState({});

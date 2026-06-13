@@ -31,7 +31,7 @@ export default function LiveActivity() {
       }
     };
     fetchEvents();
-    const t = setInterval(fetchEvents, 12000);
+    const t = setInterval(fetchEvents, 4000);
     return () => { cancelled = true; clearInterval(t); };
   }, [closed]);
 

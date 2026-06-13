@@ -3,6 +3,7 @@ import InfoPage from "../components/InfoPage";
 export function About() {
   return (
     <InfoPage
+      slug="about"
       title="Hakkımızda"
       subtitle="Coinberx, Türkiye için tasarlanmış premium bir kripto borsasıdır."
     >
@@ -24,7 +25,7 @@ export function Blog() {
     { t: "BERX nedir, neye yarar?", d: "Coinberx yerel coininin kullanım avantajları", date: "20 Mart 2026" },
   ];
   return (
-    <InfoPage title="Blog" subtitle="Kripto, piyasa analizleri ve Coinberx duyuruları.">
+    <InfoPage slug="blog" title="Blog" subtitle="Kripto, piyasa analizleri ve Coinberx duyuruları.">
       <div className="space-y-3 mt-2">
         {posts.map((p) => (
           <div key={p.t} className="card-surface p-5">
@@ -40,7 +41,7 @@ export function Blog() {
 
 export function Career() {
   return (
-    <InfoPage title="Kariyer" subtitle="Türkiye'nin en hızlı büyüyen kripto borsasında çalışmak ister misiniz?">
+    <InfoPage slug="career" title="Kariyer" subtitle="Türkiye'nin en hızlı büyüyen kripto borsasında çalışmak ister misiniz?">
       <p>Coinberx ekibi büyüyor. Yetenekli mühendisler, ürün tasarımcıları ve müşteri başarısı uzmanları arıyoruz.</p>
       <div className="space-y-3 mt-4">
         {["Senior Backend Engineer (Python)", "Mobile Developer (React Native)", "Trading Operations Specialist", "Müşteri Destek Uzmanı"].map((r) => (
@@ -56,7 +57,7 @@ export function Career() {
 
 export function Press() {
   return (
-    <InfoPage title="Basın" subtitle="Coinberx hakkında medya kaynakları ve basın bültenleri.">
+    <InfoPage slug="press" title="Basın" subtitle="Coinberx hakkında medya kaynakları ve basın bültenleri.">
       <p>Basın ile ilgili tüm sorularınız için <a href="mailto:basin@coinberx.com" className="text-[#16A34A]">basin@coinberx.com</a> adresine yazabilirsiniz.</p>
       <div className="card-surface p-5 mt-4">
         <div className="font-display text-lg">Marka Kiti</div>
@@ -75,7 +76,7 @@ export function Help() {
     { t: "Güvenlik", d: "Şifre yönetimi, oturum kontrolü" },
   ];
   return (
-    <InfoPage title="Yardım Merkezi" subtitle="Sıkça sorulan konular ve adım adım rehberler.">
+    <InfoPage slug="help" title="Yardım Merkezi" subtitle="Sıkça sorulan konular ve adım adım rehberler.">
       <div className="grid sm:grid-cols-2 gap-4 mt-2">
         {topics.map((t) => (
           <div key={t.t} className="card-surface p-5 hover:border-[#16A34A]/40 transition">
@@ -98,7 +99,7 @@ export function FAQ() {
     ["USDT için hangi ağları destekliyorsunuz?", "TRC20, ERC20 ve BEP20. Her işlemde ağ seçimi zorunludur."],
   ];
   return (
-    <InfoPage title="Sıkça Sorulan Sorular">
+    <InfoPage slug="faq" title="Sıkça Sorulan Sorular">
       <div className="space-y-3 mt-2">
         {items.map(([q, a]) => (
           <div key={q} className="card-surface p-5">
@@ -113,7 +114,7 @@ export function FAQ() {
 
 export function Contact() {
   return (
-    <InfoPage title="İletişim" subtitle="Bize ulaşmanın en hızlı yolları.">
+    <InfoPage slug="contact" title="İletişim" subtitle="Bize ulaşmanın en hızlı yolları.">
       <div className="grid sm:grid-cols-2 gap-4 mt-2">
         <div className="card-surface p-6">
           <div className="text-xs text-[#64748B] uppercase">Müşteri Hizmetleri</div>
@@ -148,7 +149,7 @@ export function Security() {
     ["Şifre hijyeni", "Şifreler bcrypt ile saklanır, brute-force koruması her e-posta için 5 başarısız denemeden sonra 15 dk kilit uygular."],
   ];
   return (
-    <InfoPage title="Güvenlik" subtitle="Coinberx'te varlığınızı koruyan katmanlar.">
+    <InfoPage slug="security" title="Güvenlik" subtitle="Coinberx'te varlığınızı koruyan katmanlar.">
       <div className="grid sm:grid-cols-2 gap-4 mt-2">
         {items.map(([h, d]) => (
           <div key={h} className="card-surface p-5">
@@ -163,7 +164,7 @@ export function Security() {
 
 export function Terms() {
   return (
-    <InfoPage title="Kullanım Şartları" subtitle="Coinberx hizmetlerini kullanırken geçerli olan koşullar.">
+    <InfoPage slug="terms" title="Kullanım Şartları" subtitle="Coinberx hizmetlerini kullanırken geçerli olan koşullar.">
       <p><strong>1. Taraflar.</strong> İşbu Sözleşme, Coinberx Yatırım Hizmetleri A.Ş. ("Coinberx") ile platforma kayıt olan gerçek/tüzel kişi ("Kullanıcı") arasında akdedilmiştir.</p>
       <p><strong>2. Hizmet kapsamı.</strong> Coinberx, kripto varlıkların alım, satım, saklama ve transferine yönelik aracılık hizmeti sunar. Coinberx fiyat tavsiyesi vermez; tüm işlemler kullanıcı sorumluluğundadır.</p>
       <p><strong>3. Hesap & KYC.</strong> Türkiye mevzuatı gereği para çekme ve belirli işlemler için kimlik doğrulama (KYC) zorunludur. Kullanıcı, sağlanan bilgilerin doğruluğundan sorumludur.</p>
@@ -177,7 +178,7 @@ export function Terms() {
 
 export function Privacy() {
   return (
-    <InfoPage title="Gizlilik Politikası" subtitle="Verileriniz nasıl saklanıyor, kim erişebilir, ne kadar süreyle tutulur.">
+    <InfoPage slug="privacy" title="Gizlilik Politikası" subtitle="Verileriniz nasıl saklanıyor, kim erişebilir, ne kadar süreyle tutulur.">
       <p>Coinberx, KVKK (6698 sayılı Kanun) ve ilgili mevzuat çerçevesinde kişisel verilerinizi işler.</p>
       <p><strong>Toplanan veriler:</strong> ad-soyad, TC kimlik no, doğum tarihi, e-posta, telefon, IP adresi, oturum logları, KYC belgeleri, banka IBAN bilgileri, işlem geçmişi.</p>
       <p><strong>Kullanım amacı:</strong> MASAK uyumlu kimlik doğrulama, dolandırıcılık önleme, hizmet sunumu, müşteri destek iletişimi.</p>
@@ -190,7 +191,7 @@ export function Privacy() {
 
 export function Risk() {
   return (
-    <InfoPage title="Risk Bildirimi" subtitle="Kripto para işlemlerinden önce mutlaka okumanız gerekenler.">
+    <InfoPage slug="risk" title="Risk Bildirimi" subtitle="Kripto para işlemlerinden önce mutlaka okumanız gerekenler.">
       <p><strong>Yüksek volatilite.</strong> Kripto varlıkların fiyatları kısa sürede yüksek oranda dalgalanabilir. Yatırdığınız sermayenin tamamını kaybedebilirsiniz.</p>
       <p><strong>Regülasyon riski.</strong> Türkiye veya küresel düzenleyiciler kripto varlıklara yönelik yasak/sınırlama getirebilir; bu durum likiditeyi ve fiyatı doğrudan etkileyebilir.</p>
       <p><strong>Teknoloji riski.</strong> Akıllı kontrat hataları, ağ saldırıları, cüzdan kayıpları geri döndürülemez olabilir.</p>
@@ -213,7 +214,7 @@ export function Fees() {
     ["İç transfer", "%0,05", "Coinberx kullanıcıları arası"],
   ];
   return (
-    <InfoPage title="Ücretler" subtitle="Coinberx işlem ve hizmet ücretleri.">
+    <InfoPage slug="fees" title="Ücretler" subtitle="Coinberx işlem ve hizmet ücretleri.">
       <div className="card-surface overflow-x-auto mt-2">
         <table className="w-full text-sm">
           <thead><tr className="text-xs text-[#64748B] text-left"><th className="px-4 py-3">İşlem</th><th>Ücret</th><th>Not</th></tr></thead>
@@ -236,7 +237,7 @@ export function Announcements() {
     { d: "15 Ocak 2026", t: "Mobil bottom navigation güncellemesi", b: "Mobilde işlem sayfalarına daha hızlı erişim için yenilenen alt menü." },
   ];
   return (
-    <InfoPage title="Duyurular" subtitle="Coinberx'ten önemli güncellemeler.">
+    <InfoPage slug="announcements" title="Duyurular" subtitle="Coinberx'ten önemli güncellemeler.">
       <div className="space-y-3 mt-2">
         {items.map((it) => (
           <div key={it.t} className="card-surface p-5">

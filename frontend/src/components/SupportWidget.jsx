@@ -71,7 +71,7 @@ export default function SupportWidget() {
         if (!open) setUnread(s.unread_user_count || 0);
       } catch { /* ignore */ }
     };
-    const t = setInterval(tick, 8000);
+    const t = setInterval(tick, 4000);
     tick();
     return () => { cancelled = true; clearInterval(t); };
   }, [open, session, user]);

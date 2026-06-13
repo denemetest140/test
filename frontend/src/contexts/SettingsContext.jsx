@@ -135,3 +135,11 @@ export const SettingsProvider = ({ children }) => {
 };
 
 export const useSettings = () => useContext(SettingsContext) || { settings: DEFAULTS, loaded: true, refresh: () => {}, applyPageSeo: () => {} };
+
+/** Convenience hook: call inside a page to fetch & apply slug-specific SEO. */
+export const usePageSeo = (slug) => {
+  const { applyPageSeo } = useSettings();
+  useEffect(() => {
+    if (slug) applyPageSeo(slug);
+  }, [slug, applyPageSeo]);
+};

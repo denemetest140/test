@@ -4,10 +4,12 @@ import { api, formatTRY, formatNumber, formatPct, errToStr } from "../lib/api";
 import { createChart, CandlestickSeries } from "lightweight-charts";
 import { toast } from "sonner";
 import { MagnifyingGlass, CaretDown, Star } from "@phosphor-icons/react";
+import { usePageSeo } from "../contexts/SettingsContext";
 
 const INTERVALS = [["5m","5dk"],["15m","15dk"],["1h","1sa"],["4h","4sa"],["1d","1g"]];
 
 export default function Trade() {
+  usePageSeo("trade");
   const { symbol = "BTC" } = useParams();
   const sym = symbol.toUpperCase();
   const nav = useNavigate();

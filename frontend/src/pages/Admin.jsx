@@ -822,7 +822,7 @@ function PlatformAddressesPanel() {
   const [rows, setRows] = useState([]);
   const [networks, setNetworks] = useState([]);
   const COINS = ["BTC","ETH","USDT","BNB","SOL","XRP","ADA","DOGE","TRX","AVAX","MATIC","LINK","DOT","LTC","SHIB","TON","BERX","UNI","AAVE","ATOM","NEAR","FIL","ARB","OP","INJ"];
-  const [form, setForm] = useState({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true });
+  const [form, setForm] = useState({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true, contract_address: "", explorer_url: "", memo_required: false, memo_label: "" });
   const [edit, setEdit] = useState(null);
 
   const load = () => {
@@ -842,7 +842,7 @@ function PlatformAddressesPanel() {
       });
       toast.success("Adres kaydedildi");
       setEdit(null);
-      setForm({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true });
+      setForm({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true, contract_address: "", explorer_url: "", memo_required: false, memo_label: "" });
       load();
     } catch (e) { toast.error(errToStr(e)); }
   };
@@ -858,7 +858,7 @@ function PlatformAddressesPanel() {
 
   const startEdit = (r) => {
     setEdit(`${r.symbol}:${r.network}`);
-    setForm({ symbol: r.symbol, network: r.network, address: r.address, warning: r.warning || "", min_deposit: r.min_deposit || 0, deposit_enabled: r.deposit_enabled !== false, withdraw_enabled: r.withdraw_enabled !== false });
+    setForm({ symbol: r.symbol, network: r.network, address: r.address, warning: r.warning || "", min_deposit: r.min_deposit || 0, deposit_enabled: r.deposit_enabled !== false, withdraw_enabled: r.withdraw_enabled !== false, contract_address: r.contract_address || "", explorer_url: r.explorer_url || "", memo_required: !!r.memo_required, memo_label: r.memo_label || "" });
   };
 
   return (
@@ -897,9 +897,23 @@ function PlatformAddressesPanel() {
             <input type="checkbox" checked={form.withdraw_enabled} onChange={(e) => setForm({ ...form, withdraw_enabled: e.target.checked })}/> Çekim aktif
           </label>
         </div>
+        <div>
+          <label className="text-xs text-[#64748B]">Contract Address (opsiyonel)</label>
+          <input className="input-field text-sm mt-1 font-mono" value={form.contract_address} onChange={(e) => setForm({ ...form, contract_address: e.target.value })} placeholder="0x... (USDT-ERC20 vb.)" data-testid="addr-contract"/>
+        </div>
+        <div>
+          <label className="text-xs text-[#64748B]">Explorer URL (opsiyonel)</label>
+          <input className="input-field text-sm mt-1" value={form.explorer_url} onChange={(e) => setForm({ ...form, explorer_url: e.target.value })} placeholder="https://tronscan.org/" data-testid="addr-explorer"/>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-[#475569]">
+            <input type="checkbox" checked={form.memo_required} onChange={(e) => setForm({ ...form, memo_required: e.target.checked })} data-testid="addr-memo-required"/> Memo/Tag gerekli
+          </label>
+          <input className="input-field text-sm flex-1" value={form.memo_label} onChange={(e) => setForm({ ...form, memo_label: e.target.value })} placeholder="Memo etiketi (XRP/XLM için)" data-testid="addr-memo-label"/>
+        </div>
         <div className="flex gap-2">
           <button type="submit" className="btn-primary px-4 py-2 rounded-lg text-sm flex-1" data-testid="addr-save">Kaydet</button>
-          {edit && <button type="button" onClick={() => { setEdit(null); setForm({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true }); }} className="px-4 py-2 rounded-lg border border-[#E2E8F0] text-sm">İptal</button>}
+          {edit && <button type="button" onClick={() => { setEdit(null); setForm({ symbol: "USDT", network: "TRC20", address: "", warning: "", min_deposit: 0, deposit_enabled: true, withdraw_enabled: true, contract_address: "", explorer_url: "", memo_required: false, memo_label: "" }); }} className="px-4 py-2 rounded-lg border border-[#E2E8F0] text-sm">İptal</button>}
         </div>
       </form>
 
@@ -1209,8 +1223,19 @@ function SiteInfoPanel({ settings, onSave }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Site Adı"><input data-testid="site-name" className="input-field" value={f.site_name||""} onChange={(e) => upd("site_name", e.target.value)} /></Field>
           <Field label="Site Sloganı"><input data-testid="site-slogan" className="input-field" value={f.site_slogan||""} onChange={(e) => upd("site_slogan", e.target.value)} /></Field>
-          <Field label="Logo URL"><input data-testid="site-logo" className="input-field" value={f.logo_url||""} onChange={(e) => upd("logo_url", e.target.value)} placeholder="https://..." /></Field>
-          <Field label="Favicon URL"><input data-testid="site-favicon" className="input-field" value={f.favicon_url||""} onChange={(e) => upd("favicon_url", e.target.value)} placeholder="https://.../favicon.png" /></Field>
+          <Field label="Logo (URL veya dosya yükle)">
+            <div className="flex gap-2 items-center">
+              <input data-testid="site-logo" className="input-field flex-1" value={f.logo_url||""} onChange={(e) => upd("logo_url", e.target.value)} placeholder="https://..." />
+              <MediaUploadButton purpose="logo" onUploaded={(url) => upd("logo_url", url)} testid="upload-logo" />
+            </div>
+            {f.logo_url && <img src={f.logo_url} alt="logo" className="h-10 mt-2 rounded border border-[#E2E8F0] bg-white p-1" />}
+          </Field>
+          <Field label="Favicon (URL veya dosya yükle)">
+            <div className="flex gap-2 items-center">
+              <input data-testid="site-favicon" className="input-field flex-1" value={f.favicon_url||""} onChange={(e) => upd("favicon_url", e.target.value)} placeholder="https://.../favicon.png" />
+              <MediaUploadButton purpose="favicon" onUploaded={(url) => upd("favicon_url", url)} testid="upload-favicon" />
+            </div>
+          </Field>
           <Field label="Açıklama (footer)"><textarea data-testid="site-desc" className="input-field" value={f.site_description||""} onChange={(e) => upd("site_description", e.target.value)} rows={2} /></Field>
           <Field label="Footer metni"><input className="input-field" value={f.footer_text||""} onChange={(e) => upd("footer_text", e.target.value)} /></Field>
         </div>
@@ -1247,6 +1272,24 @@ function SiteInfoPanel({ settings, onSave }) {
               </button>
             </label>
           ))}
+        </div>
+      </div>
+      <div className="card-surface p-5">
+        <div className="text-sm font-medium mb-3">Google OAuth Yapılandırması</div>
+        <div className="text-xs text-[#64748B] mb-3">Bu alanları doldurun, ardından üstteki "Google ile giriş aktif" anahtarını açın. Yapılandırma eksikse Google butonu kullanıcı tarafında görüntülenmez.</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Google Client ID">
+            <input data-testid="google-client-id" className="input-field" value={f.google_client_id||""} onChange={(e) => upd("google_client_id", e.target.value)} placeholder="123-xyz.apps.googleusercontent.com" />
+          </Field>
+          <Field label="Google Client Secret">
+            <input data-testid="google-client-secret" type="password" className="input-field" value={f.google_client_secret||""} onChange={(e) => upd("google_client_secret", e.target.value)} placeholder="••••••" />
+          </Field>
+          <Field label="Redirect URI">
+            <input data-testid="google-redirect" className="input-field" value={f.google_redirect_uri||""} onChange={(e) => upd("google_redirect_uri", e.target.value)} placeholder="https://uygulamaniz.com/auth/google/callback" />
+          </Field>
+          <Field label="Yapılandırma Durumu">
+            <GoogleStatusBadge />
+          </Field>
         </div>
       </div>
       <button onClick={save} className="btn-primary px-5 py-2.5 rounded-lg text-sm" data-testid="siteinfo-save">Site Ayarlarını Kaydet</button>
@@ -1359,6 +1402,60 @@ function SeoPanel() {
           </div>
         ) : <div className="text-xs text-[#64748B] text-center py-4">Henüz sayfa-spesifik SEO yok</div>}
       </div>
+    </div>
+  );
+}
+
+
+function MediaUploadButton({ purpose = "brand", onUploaded, testid }) {
+  const ref = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const onChoose = () => ref.current?.click();
+  const onChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("purpose", purpose);
+      fd.append("file", file);
+      const { data } = await api.post("/admin/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      onUploaded?.(data.url);
+      toast.success("Dosya yüklendi");
+    } catch (err) {
+      toast.error(errToStr(err));
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  };
+  return (
+    <>
+      <input ref={ref} type="file" accept="image/*,.ico,.svg" onChange={onChange} className="hidden" data-testid={testid ? `${testid}-input` : undefined} />
+      <button type="button" disabled={busy} onClick={onChoose} className="px-3 py-2 rounded-lg border border-[#16A34A] text-[#16A34A] text-xs whitespace-nowrap" data-testid={testid}>
+        {busy ? "Yükleniyor..." : "Dosya Yükle"}
+      </button>
+    </>
+  );
+}
+
+function GoogleStatusBadge() {
+  const [s, setS] = useState(null);
+  useEffect(() => {
+    let active = true;
+    const fetchStatus = () => api.get("/auth/google/status")
+      .then((r) => { if (active) setS(r.data); })
+      .catch(() => { if (active) setS({ available: false, enabled: false, configured: false }); });
+    fetchStatus();
+    const t = setInterval(fetchStatus, 5000);
+    return () => { active = false; clearInterval(t); };
+  }, []);
+  if (!s) return <div className="text-xs text-[#64748B]">Yükleniyor...</div>;
+  const tone = s.available ? "bg-green-50 text-[#16A34A] border-[#16A34A]/30" : s.configured ? "bg-yellow-50 text-[#D97706] border-[#D97706]/30" : "bg-red-50 text-[#DC2626] border-[#DC2626]/30";
+  const label = s.available ? "Yapılandırma tamam ve aktif" : s.configured ? "Yapılandırma var, anahtar kapalı" : "Yapılandırma eksik";
+  return (
+    <div className={`px-3 py-2 rounded-lg border text-xs ${tone}`} data-testid="google-status">
+      {label}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { api, formatTRY, formatPct } from "../lib/api";
 import { MagnifyingGlass, Star, CaretUp, CaretDown, ArrowRight } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { CoinIcon } from "../lib/coinIcons.jsx";
+import { usePageSeo } from "../contexts/SettingsContext";
 
 function Sparkline({ data, up }) {
   if (!data || data.length < 2) return <div className="h-7 w-20"/>;
@@ -27,6 +28,7 @@ function Sparkline({ data, up }) {
 }
 
 export default function Markets() {
+  usePageSeo("markets");
   const [all, setAll] = useState([]);
   const [sparks, setSparks] = useState({});
   const [query, setQuery] = useState("");
