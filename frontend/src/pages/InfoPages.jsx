@@ -12,7 +12,7 @@ export function About() {
       <div className="grid sm:grid-cols-3 gap-4 mt-8">
         <div className="card-surface p-5"><div className="font-display text-2xl text-[#16A34A]">2024</div><div className="text-xs text-[#64748B] mt-1">Kuruluş yılı</div></div>
         <div className="card-surface p-5"><div className="font-display text-2xl text-[#16A34A]">İstanbul</div><div className="text-xs text-[#64748B] mt-1">Merkez</div></div>
-        <div className="card-surface p-5"><div className="font-display text-2xl text-[#16A34A]">50+</div><div className="text-xs text-[#64748B] mt-1">Kripto varlık</div></div>
+        <div className="card-surface p-5"><div className="font-display text-2xl text-[#16A34A]">Zengin</div><div className="text-xs text-[#64748B] mt-1">Kripto seçenekleri</div></div>
       </div>
     </InfoPage>
   );

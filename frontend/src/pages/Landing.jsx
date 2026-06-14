@@ -419,7 +419,7 @@ export default function Landing() {
               <span className="bg-gradient-to-r from-[#16A34A] via-[#22C55E] to-[#16A34A] bg-clip-text text-transparent">anında başla.</span>
             </h1>
             <p className="text-[#64748B] text-base sm:text-lg mt-6 max-w-2xl">
-              Hızlı, güvenli ve tamamen Türkçe kripto al-sat platformu. IBAN ile dakikalar içinde TL yatırın, 35+ coin ile düşük komisyonla işlem yapın.
+              Hızlı, güvenli ve tamamen Türkçe kripto al-sat platformu. IBAN ile dakikalar içinde TL yatırın, geniş coin seçenekleriyle düşük komisyonla işlem yapın.
             </p>
             <div className="flex flex-wrap gap-3 mt-8">
               {user ? (
@@ -581,7 +581,7 @@ export default function Landing() {
               {icon: CreditCard, title: "Hızlı IBAN Yatır/Çek", desc: "Kişisel referans kodu + dekont ile Havale/EFT. Admin onaylı çekme."},
               {icon: Lightning, title: "Gerçek Zamanlı Veri", desc: "Binance seviyesinde likidite, canlı candlestick + emir defteri."},
               {icon: ChartLineUp, title: "Kolay Al-Sat", desc: "Market ve Limit emirleri, açık emir yönetimi, portföy P/L takibi."},
-              {icon: Globe, title: "35+ Coin Desteği", desc: "BTC, ETH, USDT, SOL, BNB, XRP ve daha fazlası. TRY çiftleriyle."},
+              {icon: Globe, title: "Geniş Coin Seçenekleri", desc: "BTC, ETH, USDT, SOL, BNB, XRP ve popüler altcoinler. TRY ve USDT çiftleriyle."},
             ].map(({icon: Icon, title, desc}) => (
               <div key={title} className="card-surface p-6 hover:border-[#16A34A]/50 transition">
                 <div className="w-11 h-11 rounded-lg bg-[#16A34A]/10 text-[#16A34A] flex items-center justify-center">
@@ -606,7 +606,7 @@ export default function Landing() {
           {[
             {n: "01", title: "Ücretsiz Hesap Aç", desc: "E-posta veya Google ile saniyeler içinde kaydolun."},
             {n: "02", title: "TL Yatır (IBAN)", desc: "Banka hesabınızdan referans kodu ile havale yapın."},
-            {n: "03", title: "Kripto Al-Sat", desc: "35+ coin arasında anlık alım-satım, limit emirler."},
+            {n: "03", title: "Kripto Al-Sat", desc: "Geniş coin seçenekleriyle anlık alım-satım, limit emirler."},
           ].map((s) => (
             <div key={s.n} className="card-surface p-8 text-center relative">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[#16A34A] text-black font-display font-bold text-lg relative">
@@ -737,7 +737,7 @@ export default function Landing() {
               <div className="w-9 h-9 rounded-lg bg-[#16A34A] flex items-center justify-center text-black font-bold text-xl">C</div>
               <span className="font-display text-xl tracking-tight">Coinberx</span>
             </div>
-            <p className="text-sm text-[#64748B] mt-4 max-w-sm">Türkiye'nin premium kripto borsası. Hızlı, güvenli, tamamen Türkçe. IBAN ile TL yatırın, 35+ coin ile işlem yapın.</p>
+            <p className="text-sm text-[#64748B] mt-4 max-w-sm">Türkiye'nin premium kripto borsası. Hızlı, güvenli, tamamen Türkçe. IBAN ile TL yatırın, geniş coin seçenekleriyle işlem yapın.</p>
             <div className="flex gap-3 mt-5">
               {[TwitterLogo, TelegramLogo, InstagramLogo, YoutubeLogo].map((I, i) => (
                 <a key={i} href="#" className="w-9 h-9 rounded-lg border border-[#E2E8F0] hover:border-[#16A34A] hover:text-[#16A34A] flex items-center justify-center text-[#64748B] transition"><I size={16} weight="fill"/></a>

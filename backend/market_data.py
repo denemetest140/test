@@ -59,6 +59,80 @@ SUPPORTED_COINS = [
     {"symbol": "CAKE", "name": "PancakeSwap"},
     {"symbol": "AXS", "name": "Axie Infinity"},
     {"symbol": "GALA", "name": "Gala"},
+    {"symbol": "COMP", "name": "Compound"},
+    {"symbol": "SNX", "name": "Synthetix"},
+    {"symbol": "QNT", "name": "Quant"},
+    {"symbol": "XTZ", "name": "Tezos"},
+    {"symbol": "EGLD", "name": "MultiversX"},
+    {"symbol": "KAVA", "name": "Kava"},
+    {"symbol": "MINA", "name": "Mina"},
+    {"symbol": "CELO", "name": "Celo"},
+    {"symbol": "BLUR", "name": "Blur"},
+    {"symbol": "LPT", "name": "Livepeer"},
+    {"symbol": "MASK", "name": "Mask Network"},
+    {"symbol": "API3", "name": "API3"},
+    {"symbol": "ARKM", "name": "Arkham"},
+    {"symbol": "MEME", "name": "Memecoin"},
+    {"symbol": "ORDI", "name": "Ordinals"},
+    {"symbol": "PEOPLE", "name": "ConstitutionDAO"},
+    {"symbol": "TURBO", "name": "Turbo"},
+    {"symbol": "RAY", "name": "Raydium"},
+    {"symbol": "PENDLE", "name": "Pendle"},
+    {"symbol": "GMX", "name": "GMX"},
+    {"symbol": "FTM", "name": "Fantom"},
+    {"symbol": "THETA", "name": "Theta Network"},
+    {"symbol": "ZEC", "name": "Zcash"},
+    {"symbol": "DASH", "name": "Dash"},
+    {"symbol": "NEO", "name": "Neo"},
+    {"symbol": "IOTA", "name": "IOTA"},
+    {"symbol": "KDA", "name": "Kadena"},
+    {"symbol": "ENJ", "name": "Enjin"},
+    {"symbol": "BAT", "name": "Basic Attention"},
+    {"symbol": "1INCH", "name": "1inch"},
+    {"symbol": "ZRX", "name": "0x Protocol"},
+    {"symbol": "YFI", "name": "yearn.finance"},
+    {"symbol": "SUSHI", "name": "SushiSwap"},
+    {"symbol": "BAL", "name": "Balancer"},
+    {"symbol": "ENS", "name": "Ethereum Name Service"},
+    {"symbol": "LRC", "name": "Loopring"},
+    {"symbol": "OCEAN", "name": "Ocean Protocol"},
+    {"symbol": "COTI", "name": "COTI"},
+    {"symbol": "ANKR", "name": "Ankr"},
+    {"symbol": "SKL", "name": "SKALE"},
+    {"symbol": "CTSI", "name": "Cartesi"},
+    {"symbol": "AUDIO", "name": "Audius"},
+    {"symbol": "C98", "name": "Coin98"},
+    {"symbol": "HIGH", "name": "Highstreet"},
+    {"symbol": "MAGIC", "name": "Magic"},
+    {"symbol": "ID", "name": "SPACE ID"},
+    {"symbol": "MAV", "name": "Maverick"},
+    {"symbol": "CYBER", "name": "CyberConnect"},
+    {"symbol": "ACE", "name": "Fusionist"},
+    {"symbol": "NFP", "name": "NFPrompt"},
+    {"symbol": "ALT", "name": "AltLayer"},
+    {"symbol": "MANTA", "name": "Manta Network"},
+    {"symbol": "AEVO", "name": "Aevo"},
+    {"symbol": "BOME", "name": "Book of Meme"},
+    {"symbol": "ETHFI", "name": "ether.fi"},
+    {"symbol": "REZ", "name": "Renzo"},
+    {"symbol": "BB", "name": "BounceBit"},
+    {"symbol": "ZK", "name": "ZKsync"},
+    {"symbol": "ZRO", "name": "LayerZero"},
+    {"symbol": "IO", "name": "io.net"},
+    {"symbol": "LISTA", "name": "Lista DAO"},
+    {"symbol": "ZENT", "name": "Zentry"},
+    {"symbol": "TNSR", "name": "Tensor"},
+    {"symbol": "JUP", "name": "Jupiter"},
+    {"symbol": "PYTH", "name": "Pyth Network"},
+    {"symbol": "WIF", "name": "dogwifhat"},
+    {"symbol": "FLOKI", "name": "Floki"},
+    {"symbol": "BONK", "name": "Bonk"},
+    {"symbol": "SEI", "name": "Sei"},
+    {"symbol": "WLD", "name": "Worldcoin"},
+    {"symbol": "JTO", "name": "Jito"},
+    {"symbol": "RUNE", "name": "THORChain"},
+    {"symbol": "DYDX", "name": "dYdX"},
+    {"symbol": "BICO", "name": "Biconomy"},
 ]
 
 COIN_META = {c["symbol"]: c for c in SUPPORTED_COINS}
@@ -125,26 +199,46 @@ def _assemble_ticker_row(coin: dict, raw: dict | None, try_ticker: dict, usdt_tr
     }
 
 
+async def _fetch_tickers_resilient(coins: list[dict]) -> dict:
+    """Try a single batch fetch; on 400 (bad symbol) recursively split & skip invalid symbols.
+
+    Returns dict keyed by raw Binance symbol (e.g. "BTCUSDT"). Invalid symbols are silently dropped.
+    """
+    if not coins:
+        return {}
+    symbols_param = _binance_symbols_param(coins)
+    try:
+        rows = await _fetch(f"{BINANCE_BASE}/api/v3/ticker/24hr", {"symbols": symbols_param})
+        return {r["symbol"]: r for r in rows}
+    except Exception as exc:
+        # Binance returns 400 if ANY symbol is invalid. Split & retry.
+        if len(coins) == 1:
+            logger.info("Binance unknown symbol skipped: %sUSDT", coins[0]["symbol"])
+            return {}
+        mid = len(coins) // 2
+        left = await _fetch_tickers_resilient(coins[:mid])
+        right = await _fetch_tickers_resilient(coins[mid:])
+        return {**left, **right}
+
+
 async def fetch_all_tickers() -> list[dict]:
     """Returns 24h ticker data for all supported coins, including TRY price."""
     cached = _cache_get("tickers", _CACHE_TTL)
     if cached is not None:
         return cached
 
-    symbols_param = _binance_symbols_param(SUPPORTED_COINS)
     try:
-        usdt_data = await _fetch(
-            f"{BINANCE_BASE}/api/v3/ticker/24hr", {"symbols": symbols_param}
-        )
         try_ticker = await _fetch(
             f"{BINANCE_BASE}/api/v3/ticker/24hr", {"symbol": "USDTTRY"}
         )
         usdt_try_price = float(try_ticker["lastPrice"])
     except Exception as exc:
-        logger.error("Binance fetch failed: %s", exc)
+        logger.error("Binance USDT/TRY fetch failed: %s", exc)
         return cached or []
 
-    by_symbol = {d["symbol"]: d for d in usdt_data}
+    non_usdt = [c for c in SUPPORTED_COINS if c["symbol"] != "USDT"]
+    by_symbol = await _fetch_tickers_resilient(non_usdt)
+
     result: list[dict] = []
     for coin in SUPPORTED_COINS:
         raw = by_symbol.get(f"{coin['symbol']}USDT")
