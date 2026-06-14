@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, formatTRY, formatPct } from "../lib/api";
 import { CoinIcon } from "../lib/coinIcons.jsx";
 import { useAuth } from "../contexts/AuthContext";
-import { usePageSeo } from "../contexts/SettingsContext";
+import { usePageSeo, useSettings } from "../contexts/SettingsContext";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -224,7 +224,6 @@ function CoinRail({ title, icon: Icon, tint, coins, sparks, onMount }) {
         <div className="flex items-center gap-2">
           <Icon size={16} weight="fill" className={tint}/>
           <h3 className="font-display text-xl">{title}</h3>
-          <span className="chip text-[11px]">{coins.length}</span>
         </div>
         <div className="hidden sm:flex gap-1">
           <button onClick={() => scroll(-1)} className="w-8 h-8 rounded border border-[#E2E8F0] flex items-center justify-center hover:bg-[#FFFFFF]"><CaretRight size={12} weight="bold" className="rotate-180"/></button>
@@ -296,6 +295,7 @@ function BerxSpotlightCard({ sparks }) {
 export default function Landing() {
   usePageSeo("home");
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [coins, setCoins] = useState([]);
   const [sparks, setSparks] = useState({});
   const [query, setQuery] = useState("");
@@ -372,8 +372,14 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto flex items-center justify-between px-6 lg:px-8 py-3.5">
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-[#16A34A] flex items-center justify-center text-white font-bold text-xl shadow-sm">C</div>
-              <span className="font-display text-xl tracking-tight">Coinberx</span>
+              {settings?.logo_url ? (
+                <img src={settings.logo_url} alt={settings.site_name || "Coinberx"} className="h-9 max-w-[170px] object-contain" />
+              ) : (
+                <>
+                  <div className="w-9 h-9 rounded-lg bg-[#16A34A] flex items-center justify-center text-white font-bold text-xl shadow-sm">C</div>
+                  <span className="font-display text-xl tracking-tight">Coinberx</span>
+                </>
+              )}
             </Link>
             <nav className="hidden lg:flex items-center gap-6 text-sm text-[#475569]">
               <Link to="/markets" className="hover:text-[#16A34A] font-medium">Piyasalar</Link>
@@ -734,8 +740,14 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8 py-14 grid lg:grid-cols-5 gap-10">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-[#16A34A] flex items-center justify-center text-black font-bold text-xl">C</div>
-              <span className="font-display text-xl tracking-tight">Coinberx</span>
+              {settings?.logo_url ? (
+                <img src={settings.logo_url} alt={settings.site_name || "Coinberx"} className="h-9 max-w-[170px] object-contain" />
+              ) : (
+                <>
+                  <div className="w-9 h-9 rounded-lg bg-[#16A34A] flex items-center justify-center text-black font-bold text-xl">C</div>
+                  <span className="font-display text-xl tracking-tight">Coinberx</span>
+                </>
+              )}
             </div>
             <p className="text-sm text-[#64748B] mt-4 max-w-sm">Türkiye'nin premium kripto borsası. Hızlı, güvenli, tamamen Türkçe. IBAN ile TL yatırın, geniş coin seçenekleriyle işlem yapın.</p>
             <div className="flex gap-3 mt-5">

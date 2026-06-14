@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { api, formatTRY, errToStr } from "../lib/api";
 import { toast } from "sonner";
 import { useSettings } from "../contexts/SettingsContext";
@@ -657,15 +657,15 @@ function LiveChatPanel() {
   const [sending, setSending] = useState(false);
   const listRef = useRef(null);
 
-  const loadList = async () => {
+  const loadList = useCallback(async () => {
     try {
       const url = filter === "all" ? "/admin/live-chat/sessions" : `/admin/live-chat/sessions?status=${filter}`;
       const { data } = await api.get(url);
       setSessions(data || []);
     } catch { /* ignore */ }
-  };
+  }, [filter]);
 
-  useEffect(() => { loadList(); const t = setInterval(loadList, 8000); return () => clearInterval(t); }, [filter]);
+  useEffect(() => { loadList(); const t = setInterval(loadList, 8000); return () => clearInterval(t); }, [loadList]);
 
   const openSession = async (sid) => {
     setActiveId(sid);
@@ -970,12 +970,12 @@ function UsersPanel({ users: initUsers, onReload }) {
   const [editing, setEditing] = useState(null);
   const [detail, setDetail] = useState(null);
 
-  const reload = () => {
+  const reload = useCallback(() => {
     api.get(`/admin/users${showDeleted ? "?include_deleted=true" : ""}`)
       .then((r) => setList(r.data || []))
       .catch(() => {});
-  };
-  useEffect(() => { reload(); }, [showDeleted]);
+  }, [showDeleted]);
+  useEffect(() => { reload(); }, [reload]);
   useEffect(() => { setList(initUsers); }, [initUsers]);
 
   const filtered = list.filter((u) => {
@@ -1257,6 +1257,7 @@ function SiteInfoPanel({ settings, onSave }) {
           {[
             ["maintenance_mode","Bakım modu (admin hariç site kapalı)"],
             ["live_chat_enabled","Canlı destek butonu aktif"],
+            ["live_activity_demo","Canlı işlem akışı demo verisi (gerçek işlem azsa maskeli demo göster)"],
             ["kyc_enabled","KYC modülü aktif"],
             ["email_verification_enabled","E-posta doğrulama aktif"],
             ["email_verification_required","E-posta doğrulama zorunlu"],

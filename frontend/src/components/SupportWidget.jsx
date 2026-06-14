@@ -9,11 +9,21 @@ import { useAuth } from "../contexts/AuthContext";
 
 const STORAGE_KEY = "coinberx_chat_visitor";
 
+// We deliberately persist ONLY the bare minimum needed to resume an open
+// support chat after a page reload: the server-issued visitor_id and the
+// first name the visitor introduced themselves with. The "contact" field
+// (email/phone) is treated as PII and is NEVER written to localStorage.
 function loadVisitor() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") || {}; } catch { return {}; }
+  try {
+    const v = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") || {};
+    return { visitor_id: v.visitor_id || null, name: v.name || "" };
+  } catch { return {}; }
 }
 function saveVisitor(obj) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); } catch { /* ignore */ }
+  try {
+    const safe = { visitor_id: obj.visitor_id || null, name: obj.name || "" };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(safe));
+  } catch { /* ignore */ }
 }
 
 export default function SupportWidget() {
@@ -25,7 +35,7 @@ export default function SupportWidget() {
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [visitorId, setVisitorId] = useState(loadVisitor().visitor_id || null);
-  const [intro, setIntro] = useState({ name: loadVisitor().name || "", contact: loadVisitor().contact || "" });
+  const [intro, setIntro] = useState({ name: loadVisitor().name || "", contact: "" });
   const [pendingIntro, setPendingIntro] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);

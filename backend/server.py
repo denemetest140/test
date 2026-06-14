@@ -307,6 +307,7 @@ class SettingsIn(BaseModel):
     social_youtube: Optional[str] = None
     maintenance_mode: Optional[bool] = None
     live_chat_enabled: Optional[bool] = None
+    live_activity_demo: Optional[bool] = None
     # Theme
     theme_primary: Optional[str] = None
     theme_secondary: Optional[str] = None
@@ -453,6 +454,7 @@ DEFAULT_SETTINGS = {
     "social_youtube": "",
     "maintenance_mode": False,
     "live_chat_enabled": True,
+    "live_activity_demo": True,  # admin toggle: when on, /platform/recent-trades injects masked demo trades when real ones are scarce
     # Theme palette
     "theme_primary": "#16A34A",
     "theme_secondary": "#15803D",
@@ -483,7 +485,7 @@ PUBLIC_BRANDING_KEYS = {
     "site_name", "site_slogan", "site_description", "logo_url", "favicon_url",
     "footer_text", "contact_email", "contact_phone",
     "social_twitter", "social_telegram", "social_instagram", "social_youtube",
-    "maintenance_mode", "live_chat_enabled",
+    "maintenance_mode", "live_chat_enabled", "live_activity_demo",
     "theme_primary", "theme_secondary", "theme_accent", "theme_berx",
     "theme_background", "theme_card", "theme_text",
     "theme_button_radius", "theme_card_radius",
@@ -1947,29 +1949,95 @@ async def admin_activity_logs(
     return rows
 
 
-# -------------- Platform recent trades (real, anonymised) --------------
+# -------------- Platform recent trades (real + optional demo) --------------
+# When `live_activity_demo` setting is enabled, we top up real trades with
+# masked demo events so the public canlı işlem akışı widget always feels alive.
+# Demo names are masked (K***, M***), volumes are conservative and timestamps
+# stay recent so users are not misled into thinking these are guaranteed signals.
+_DEMO_NAME_INITIALS = list("AEKMSBCDFNRTYZIOPUVHGL")
+_DEMO_SIDES = ["buy", "sell"]
+
+
+def _build_demo_trades(market_rows: List[dict], count: int) -> List[dict]:
+    """Generate a list of plausible-looking masked trade events.
+
+    market_rows -> rows from the cached market data (so coin pool reflects reality)
+    count       -> how many to generate
+    """
+    if not market_rows or count <= 0:
+        return []
+    # Prefer common majors + handful of altcoins
+    majors = [m for m in market_rows if m.get("symbol") in {"BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "AVAX", "MATIC", "TRX", "LINK", "DOT", "BERX", "PEPE", "SHIB", "ATOM", "TON"}]
+    pool = majors if len(majors) >= 5 else market_rows
+    now = now_dt()
+    out: List[dict] = []
+    for i in range(count):
+        coin = random.choice(pool)
+        price_try = float(coin.get("price_try") or 0)
+        # Realistic micro/macro orders: 50 TRY .. 12 000 TRY (no obscene volumes)
+        amount_try = round(random.uniform(50.0, 12000.0), 2)
+        qty = amount_try / price_try if price_try > 0 else 0.0
+        side = random.choice(_DEMO_SIDES)
+        # Pick a masked label like "K***" or "M***"
+        ch = random.choice(_DEMO_NAME_INITIALS)
+        # Stagger events between 5 seconds and 4 minutes ago
+        ts = now - timedelta(seconds=random.randint(5, 240))
+        out.append({
+            "id": f"demo_{ts.timestamp():.0f}_{i}",
+            "user_label": ch + "***",
+            "symbol": coin.get("symbol"),
+            "side": side,
+            "amount_try": amount_try,
+            "quantity": round(qty, 8),
+            "created_at": ts.isoformat(),
+            "demo": True,
+        })
+    # newest first
+    out.sort(key=lambda e: e["created_at"], reverse=True)
+    return out
+
+
 @api.get("/platform/recent-trades")
 async def platform_recent_trades(limit: int = 5):
-    """Return latest real spot trades across the platform with masked user labels."""
+    """Return latest real spot trades. Top up with demo events when enabled."""
     limit = max(1, min(limit, 25))
     rows = await db.transactions.find(
         {"type": "trade"}, {"_id": 0}
     ).sort("created_at", -1).limit(limit).to_list(limit)
-    out = []
+    out: List[dict] = []
     for r in rows:
-        # mask email/name into "K***"
+        # Mask the email/name to "X***" so we never leak full identity
         user = await db.users.find_one({"user_id": r["user_id"]}, {"_id": 0, "email": 1, "name": 1})
-        label = (user or {}).get("email") or (user or {}).get("name") or "Kullanıcı"
+        raw = (user or {}).get("email") or (user or {}).get("name") or "Kullanıcı"
+        local = (raw.split("@")[0] if "@" in raw else raw).strip() or "U"
+        masked = f"{local[0].upper()}***"
         out.append({
             "id": r.get("order_id") or new_id("ev_"),
-            "user_label": label,
+            "user_label": masked,
             "symbol": r.get("symbol"),
             "side": r.get("side"),
             "amount_try": r.get("amount_try", 0.0),
             "quantity": r.get("quantity", 0.0),
             "created_at": r.get("created_at"),
+            "demo": False,
         })
-    return out
+    # Demo top-up
+    try:
+        settings = await get_settings()
+    except Exception:
+        settings = DEFAULT_SETTINGS
+    if settings.get("live_activity_demo"):
+        missing = limit - len(out)
+        if missing > 0:
+            try:
+                market_rows = await mkt.fetch_all_tickers()
+            except Exception:
+                market_rows = []
+            demo = _build_demo_trades(market_rows, missing)
+            out.extend(demo)
+            # newest first by created_at
+            out.sort(key=lambda e: e.get("created_at") or "", reverse=True)
+    return out[:limit]
 
 
 # -------------- Support --------------
@@ -2429,7 +2497,11 @@ async def public_settings():
 async def public_branding():
     """Public branding/theme/SEO/auth-toggle bundle consumed by the frontend bootstrap."""
     s = await get_settings()
-    return {k: s.get(k) for k in PUBLIC_BRANDING_KEYS}
+    out = {k: s.get(k) for k in PUBLIC_BRANDING_KEYS}
+    # `settings_version` is appended as ?v= to logo / favicon URLs on the client
+    # so a branding update busts CDN / browser caches everywhere.
+    out["settings_version"] = s.get("updated_at") or s.get("_updated_at") or ""
+    return out
 
 
 @api.get("/admin/settings")
@@ -2441,6 +2513,7 @@ async def admin_get_settings(admin: dict = Depends(require_admin)):
 async def admin_update_settings(data: SettingsIn, request: Request, admin: dict = Depends(require_admin)):
     upd = {k: v for k, v in data.model_dump(exclude_none=True).items()}
     if upd:
+        upd["updated_at"] = now_iso()
         await db.system_settings.update_one({"_id": "global"}, {"$set": upd}, upsert=True)
     await log_admin_action(admin, "settings.update", "settings", "global", list(upd.keys()), request)
     return await get_settings()

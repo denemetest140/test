@@ -122,7 +122,45 @@ Coinberx, Türk yatırımcılar için açık tema, kurumsal, premium görünüml
 ## Test credentials
 - Admin: `admin@coinberx.com` / `Admin123!`
 
-## Pending / Backlog (dürüstçe kalan)
+## 2026-02-15 turu — Live Activity Demo + Cache Busting + Coin Icon Fallback + Code Quality
+
+### Backend (`server.py`)
+- **`live_activity_demo`** ayarı: `SettingsIn`, `DEFAULT_SETTINGS` (default **True**), `PUBLIC_BRANDING_KEYS`.
+- **`/api/platform/recent-trades`** yeniden yazıldı: gerçek trade'leri **her zaman maskeli** (`X***`) döndürür; `live_activity_demo` açıkken ve gerçek trade sayısı `limit`'i karşılamıyorsa `_build_demo_trades(market_rows, missing)` çağrılır → market'ten random coin, conservative TRY tutarı (50–12 000), buy/sell, 5sn–4dk önce timestamp.
+- **`/api/admin/settings` PATCH**: her güncellemede `updated_at` yazar.
+- **`/api/branding`** yanıtına **`settings_version`** alanı (settings'in `updated_at` değeri) eklendi.
+
+### Frontend (cache busting)
+- `SettingsContext.fetchBranding`: `data.settings_version` alanı `logo_url` ve `favicon_url`'a `?v=` query'si olarak eklenir → admin logo/favicon değiştirdiğinde tüm tarayıcılarda yeni sürüm yüklenir (data: URI'lar atlanır).
+- `Landing.jsx` artık header + footer logoları **`settings.logo_url`**'i kullanıyor (önceden hardcoded "C" badge'i vardı). Default branding sağlanırsa "C" + "Coinberx" yedek render edilir.
+
+### Frontend (UI dilimi: sayı yerine ifade)
+- `Markets.jsx`: "Gerçek zamanlı kripto piyasası · {N} parite" → "**Geniş coin seçenekleri**".
+- `Landing.jsx`: `CoinRail`'deki `{coins.length}` chip kaldırıldı.
+
+### Frontend (LiveActivity widget)
+- Mobil görünür yapıldı (`hidden sm:block` kaldırıldı, w-260px mobile).
+- `maskName()` defansif (backend zaten `K***` döndürür ama eski formatları da kabul eder).
+
+### Frontend (CoinIcon fallback)
+- `lib/coinIcons.jsx`: harf baloncuğu yerine **gradient SVG circle** — deterministic renk (sembol hash'i), yarı saydam glow, 1-3 karakter beyaz bold metin. Bilinen markalar için yine resmi CDN ikonu.
+
+### Frontend (Admin)
+- "Site Ayarları" → "Auth & Özellik Anahtarları" → **"Canlı işlem akışı demo verisi"** toggle eklendi (`data-testid="toggle-live_activity_demo"`).
+
+### Frontend (Code Quality)
+- `Admin.jsx`: `loadList` ve `reload` artık `useCallback` ile sarılı; useEffect deps tutarlı.
+- `SupportWidget.jsx`: `localStorage` artık **sadece visitor_id + name** persist eder, **`contact` (e-posta/telefon) PII olarak hiçbir zaman localStorage'a yazılmaz**.
+
+### Doğrulanan akışlar (manuel)
+1. ✅ `/api/markets` 124 coin, BERX dahil.
+2. ✅ `/api/platform/recent-trades` demo=True elemanları enjekte ediyor; admin toggle `false` yapınca sadece gerçek (maskeli) trade'ler dönüyor.
+3. ✅ Admin "Canlı işlem akışı demo verisi" toggle UI'da görünür ve PATCH ile DB'ye yazılır.
+4. ✅ Admin'de bir ayar değiştirince `/api/branding`'in `settings_version` alanı güncelleniyor; logo url'sine `?v=` ekleniyor (backend access log'larda görüldü).
+5. ✅ Markets sayfası BTC/ETH/USDT/BNB/SOL/XRP/ADA + WLD, ZEC, PYTH, OP, JTO, APT, TIA, SEI, MEME, ALT, IO dahil tüm coinler görünür; eksik resmi ikonu olanlar yeni premium fallback ile geliyor.
+6. ✅ Live Activity widget gerçek + demo trade karışımıyla 4sn'de bir güncelleniyor; maskeli isim format `X***`.
+7. ✅ Frontend compiled successfully (warning yok).
+8. ✅ Backend `py_compile` temiz; supervisor RUNNING.
 - **WebSocket canlı destek**: hâlâ polling (4s'ye düşürüldü, gerçek-zamana yakın). True WebSocket sonraki adım.
 - **Gerçek Google OAuth callback library entegrasyonu**: client_id/secret ayar altyapısı tamam, fakat code → id_token doğrulama için `google-auth` / `aiohttp` library kurulum + callback handler bekliyor. Admin "Yapılandırma Eksik / Tamam" durumu görür ve uyarılır.
 - **Gerçek blockchain entegrasyonu**: crypto deposit/withdraw admin manuel onaylı (MVP).

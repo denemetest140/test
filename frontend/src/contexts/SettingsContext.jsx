@@ -43,6 +43,20 @@ const DEFAULTS = {
   footer_text: "© Coinberx · MASAK uyumlu",
 };
 
+/**
+ * Append a cache-busting `?v=` query string so logo / favicon updates
+ * propagate immediately across all browser sessions. Skip for data: URIs
+ * (inline SVG defaults) and URLs that already carry their own version param.
+ */
+function withCacheBust(url, version) {
+  if (!url || typeof url !== "string") return url;
+  if (url.startsWith("data:")) return url;
+  if (!version) return url;
+  if (url.includes("v=")) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}v=${encodeURIComponent(version)}`;
+}
+
 function applyTheme(s) {
   const r = document.documentElement.style;
   if (s.theme_primary) r.setProperty("--cb-primary", s.theme_primary);
@@ -99,9 +113,12 @@ export const SettingsProvider = ({ children }) => {
     try {
       const { data } = await api.get("/branding");
       const merged = { ...DEFAULTS, ...data };
+      const v = data?.settings_version || "";
       // Empty string from backend should fall back to defaults
       if (!merged.logo_url) merged.logo_url = DEFAULT_LOGO_SVG;
+      else merged.logo_url = withCacheBust(merged.logo_url, v);
       if (!merged.favicon_url) merged.favicon_url = DEFAULT_FAVICON_SVG;
+      else merged.favicon_url = withCacheBust(merged.favicon_url, v);
       setSettings(merged);
       applyTheme(merged);
       applyMeta(merged);

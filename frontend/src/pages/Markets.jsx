@@ -84,7 +84,7 @@ export default function Markets() {
       <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="font-display text-2xl lg:text-3xl text-[#0F172A]">Piyasa Verileri</h1>
-          <p className="text-[#64748B] text-xs mt-1">Gerçek zamanlı kripto piyasası · {all.length} parite</p>
+          <p className="text-[#64748B] text-xs mt-1">Gerçek zamanlı kripto piyasası · Geniş coin seçenekleri</p>
         </div>
         <div className="flex items-center gap-2 flex-1 max-w-md min-w-[200px] bg-white border border-[#E2E8F0] rounded-lg px-3 hover:border-[#16A34A] transition">
           <MagnifyingGlass size={16} className="text-[#64748B]"/>

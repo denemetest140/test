@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import { ChartLineUp, X } from "@phosphor-icons/react";
 import { api, formatTRY } from "../lib/api";
 
-function maskName(email) {
-  if (!email || typeof email !== "string") return "Kullanıcı";
-  const local = email.split("@")[0] || "";
+function maskName(label) {
+  // Backend already returns a masked label like "K***".
+  // We still defensively handle any raw email/name that might slip through.
+  if (!label || typeof label !== "string") return "Kullanıcı";
+  if (label.endsWith("***")) return label;
+  const local = label.split("@")[0] || "";
   if (local.length === 0) return "Kullanıcı";
-  return local[0].toUpperCase() + (local.length > 1 ? "***" : "***");
+  return local[0].toUpperCase() + "***";
 }
 
 export default function LiveActivity() {
@@ -40,8 +43,8 @@ export default function LiveActivity() {
   if (!loaded || events.length === 0) return null;
 
   return (
-    <div className="fixed bottom-24 lg:bottom-24 right-4 lg:right-6 z-30 hidden sm:block pointer-events-none">
-      <div className="pointer-events-auto card-surface backdrop-blur-xl w-[280px] p-3 shadow-xl">
+    <div className="fixed bottom-24 lg:bottom-24 right-3 lg:right-6 z-30 pointer-events-none">
+      <div className="pointer-events-auto card-surface backdrop-blur-xl w-[260px] sm:w-[280px] p-3 shadow-xl">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 text-[10px] text-[#64748B]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse-green"/>

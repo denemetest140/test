@@ -26,6 +26,21 @@ const BRAND_TINTS = {
   AAVE: "#B6509E", UNI: "#FF007A", PEPE: "#469F47",
 };
 
+// Deterministic palette for unknown symbols so the same coin always gets the
+// same colour across the app (markets ↔ wallet ↔ trade ↔ admin).
+const FALLBACK_PALETTE = [
+  "#0EA5E9", "#6366F1", "#8B5CF6", "#EC4899", "#F43F5E",
+  "#F97316", "#EAB308", "#22C55E", "#10B981", "#14B8A6",
+  "#06B6D4", "#A855F7", "#D946EF", "#84CC16", "#3B82F6",
+];
+
+function hashTint(symbol) {
+  const s = String(symbol || "?");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return FALLBACK_PALETTE[h % FALLBACK_PALETTE.length];
+}
+
 export function coinIconUrl(symbol) {
   if (!symbol) return null;
   const s = String(symbol).toUpperCase();
@@ -35,7 +50,7 @@ export function coinIconUrl(symbol) {
 
 export function coinTint(symbol) {
   const s = String(symbol || "").toUpperCase();
-  return BRAND_TINTS[s] || "#16A34A";
+  return BRAND_TINTS[s] || hashTint(s);
 }
 
 // React görseli — gerçek ikon yüklenemezse fallback olarak harf avatarı.
@@ -80,15 +95,40 @@ export function CoinIcon({ symbol, size = 28, className = "", title }) {
 
   if (failed) {
     const tint = coinTint(s);
+    // Smart abbreviation: 1-3 chars depending on symbol length
+    const label = s.length <= 2 ? s : s.length <= 4 ? s.slice(0, 3) : s.slice(0, 3);
+    const fontSize = Math.max(8, Math.round(size * (label.length >= 3 ? 0.34 : 0.42)));
+    const gradId = `cf_${s.replace(/[^A-Z0-9]/g, "")}`;
     return (
-      <span
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        className={`inline-block ${className}`}
         title={title || s}
-        className={`inline-flex items-center justify-center rounded-full font-semibold ${className}`}
-        style={{
-          width: size, height: size, background: `${tint}1A`, color: tint,
-          fontSize: Math.max(9, Math.round(size * 0.40)),
-        }}
-      >{s.slice(0, s.length > 4 ? 3 : 2)}</span>
+        aria-label={s}
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={tint} stopOpacity="1" />
+            <stop offset="100%" stopColor={tint} stopOpacity="0.72" />
+          </linearGradient>
+        </defs>
+        <circle cx="32" cy="32" r="31" fill={`url(#${gradId})`} />
+        <circle cx="32" cy="32" r="31" fill="none" stroke="#FFFFFF" strokeOpacity="0.18" strokeWidth="1.5" />
+        <circle cx="22" cy="22" r="11" fill="#FFFFFF" opacity="0.10" />
+        <text
+          x="32"
+          y="32"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontFamily="Inter, Segoe UI, system-ui, sans-serif"
+          fontWeight="700"
+          fontSize={(fontSize * 64) / size}
+          fill="#FFFFFF"
+          letterSpacing="-0.5"
+        >{label}</text>
+      </svg>
     );
   }
   return (
