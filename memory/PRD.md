@@ -64,7 +64,29 @@ Coinberx, Türk yatırımcılar için açık tema, kurumsal, premium görünüml
 - Hakkımızda, Blog, Kariyer, Basın, Yardım, SSS, İletişim, Güvenlik, Kullanım Şartları, Gizlilik, Risk Bildirimi, Ücretler, Duyurular — hepsi premium Türkçe içerikle.
 - Giriş yapan kullanıcı tüm public sayfalara erişebilir.
 
-## Bu turda eklenen / değiştirilen (2026-02-13)
+## Bu turda (2026-02-14) eklenenler — UI/UX & Navigation Polish
+
+### Logged-in user → Anasayfaya kolay dönüş
+- `Sidebar`: Marka (logo) artık `<Link to="/">`. Nav'a en üste **"Anasayfa"** (House icon) eklendi (`data-testid="nav-home"`). Logo `settings.logo_url` varsa onu kullanıyor, yoksa default.
+- `TopNav`: Mobil brand `<Link to="/">`. Desktop'ta yeni **"Anasayfa"** link butonu (`data-testid="topnav-home-link"`). Profil dropdown'ında da Anasayfa.
+- `MobileBottomNav`: İlk sekme **Anasayfa** (House icon, `data-testid="mob-home"`).
+
+### Mobil drawer artık dolu (`MobileDrawer.jsx` — yeni)
+- Header: brand link + X kapat butonu.
+- Logged-in user kartı: avatar + ad + email + 2 quick action (Cüzdanım, Panele Git).
+- "HESABIM" bölümü (auth): Gösterge Paneli, Spot İşlem, Cüzdan, Gönder/Al, BERX Coin, KYC, Profil.
+- "COINBERX" bölümü (herkese): Anasayfa, Piyasalar, Hakkımızda, Yardım Merkezi, SSS, Güvenlik, Blog, Duyurular, İletişim.
+- Admin satırı (admin için): Yönetici Paneli.
+- Footer: Çıkış Yap butonu + destek e-posta + telefon + versiyon.
+- Drawer animations (`fadeIn`, `slideInLeft`) `index.css`'e eklendi.
+- `Layout.jsx` yeniden yazıldı: `mobileOpen` state + `MobileDrawer` ile sidebar swap edildi.
+
+### Default branding & favicon
+- `SettingsContext`: `DEFAULT_LOGO_SVG` (Coinberx yeşil C logo) ve `DEFAULT_FAVICON_SVG` (green badge) inline base64 SVG olarak eklendi. Backend boş gönderse bile default uygulanıyor.
+- `public/index.html`: title → "Coinberx | Güvenli ve Hızlı Kripto Para Borsası", `<link rel="icon">` + `apple-touch-icon` data: SVG, theme-color #16A34A.
+
+### BERX coin icon premium
+- `coinIcons.jsx`: BERX için harf rozeti yerine **inline SVG** — radial gold gradient + iç ring + Coinberx "B" form + uydu noktaları. Tüm coin listelerinde tutarlı görünüyor.
 
 ### Backend (server.py + networks.py)
 - **Limit matching engine**: `_match_single_order`, `run_limit_matching_cycle`, `_limit_matching_loop` background task, admin force-tick endpoint.

@@ -3,11 +3,15 @@ import { api } from "../lib/api";
 
 const SettingsContext = createContext(null);
 
+const DEFAULT_LOGO_SVG = `data:image/svg+xml;base64,${btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 56"><defs><linearGradient id="b" x1="0" x2="1"><stop offset="0" stop-color="#16A34A"/><stop offset="1" stop-color="#15803D"/></linearGradient></defs><rect x="6" y="6" width="44" height="44" rx="12" fill="url(#b)"/><path d="M30 18 a12 12 0 1 0 8 21 l-3.5-3.5 a7 7 0 1 1 -4.5-12 a7 7 0 0 1 5 2 L38 22 A12 12 0 0 0 30 18 Z" fill="#fff"/><text x="60" y="38" font-family="Inter,Segoe UI,Arial" font-size="26" font-weight="700" fill="#0F172A">Coinberx</text></svg>`)}`;
+
+const DEFAULT_FAVICON_SVG = `data:image/svg+xml;base64,${btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#16A34A"/><stop offset="1" stop-color="#0E7C36"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#g)"/><path d="M37 20a14 14 0 1 0 10 24l-5-5a8 8 0 1 1-5-13 8 8 0 0 1 5.6 2.3L47 23A14 14 0 0 0 37 20Z" fill="#fff"/></svg>`)}`;
+
 const DEFAULTS = {
   site_name: "Coinberx",
   site_slogan: "Türkiye'nin premium kripto borsası",
-  logo_url: "",
-  favicon_url: "",
+  logo_url: DEFAULT_LOGO_SVG,
+  favicon_url: DEFAULT_FAVICON_SVG,
   contact_email: "destek@coinberx.com",
   contact_phone: "",
   social_twitter: "",
@@ -95,6 +99,9 @@ export const SettingsProvider = ({ children }) => {
     try {
       const { data } = await api.get("/branding");
       const merged = { ...DEFAULTS, ...data };
+      // Empty string from backend should fall back to defaults
+      if (!merged.logo_url) merged.logo_url = DEFAULT_LOGO_SVG;
+      if (!merged.favicon_url) merged.favicon_url = DEFAULT_FAVICON_SVG;
       setSettings(merged);
       applyTheme(merged);
       applyMeta(merged);

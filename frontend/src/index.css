@@ -226,3 +226,21 @@ h1, h2, h3, h4, .font-display {
 /* Helpful soft surface tokens for grouping */
 .bg-soft { background: var(--bg-soft); }
 .surface-row:hover { background: var(--surface-hover); }
+
+
+/* Drawer animations */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+
+/* Make scrollbars subtle */
+.scrollbar-thin::-webkit-scrollbar { width: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(15,23,42,0.15); border-radius: 999px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(15,23,42,0.30); }
+
+/* Tabular numerals for prices */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Mobile-first touch target boost on bottom bar */
+@media (max-width: 1023px) {
+  body { -webkit-tap-highlight-color: transparent; }
+}

@@ -45,20 +45,36 @@ export function CoinIcon({ symbol, size = 28, className = "", title }) {
   const [failed, setFailed] = useState(false);
   const s = String(symbol || "?").toUpperCase();
 
-  // BERX için özgün marka rozeti
+  // BERX için özgün marka rozeti — premium gold coin SVG
   if (s === "BERX") {
     return (
-      <span
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        className={`inline-block ${className}`}
         title={title || s}
-        className={`inline-flex items-center justify-center rounded-full font-bold ${className}`}
-        style={{
-          width: size, height: size,
-          background: "linear-gradient(135deg, #F5C04D 0%, #D4A017 60%, #B8860B 100%)",
-          color: "#1F1A0A",
-          fontSize: Math.max(10, Math.round(size * 0.42)),
-          boxShadow: "0 1px 2px rgba(15,23,42,.08), inset 0 -1px 0 rgba(0,0,0,.08)",
-        }}
-      >B</span>
+        aria-label="BERX"
+      >
+        <defs>
+          <radialGradient id="berxBg" cx="40%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#F8DA80" />
+            <stop offset="55%" stopColor="#D4A017" />
+            <stop offset="100%" stopColor="#9A6E0A" />
+          </radialGradient>
+          <linearGradient id="berxRim" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <circle cx="32" cy="32" r="30" fill="url(#berxBg)" />
+        <circle cx="32" cy="32" r="30" fill="url(#berxRim)" />
+        <circle cx="32" cy="32" r="24.5" fill="none" stroke="#FFFFFF" strokeOpacity="0.35" strokeWidth="1" />
+        <path d="M22 16 H35 a10 10 0 0 1 7.6 16.4 A10.6 10.6 0 0 1 36 49 H22 V16 Z M28 22 V30 H34 a4 4 0 0 0 0-8 H28 Z M28 35 V43 H35 a4 4 0 0 0 0-8 H28 Z"
+              fill="#1F1A0A" />
+        <circle cx="50" cy="14" r="3" fill="#FFFFFF" opacity="0.85" />
+        <circle cx="14" cy="50" r="2" fill="#FFFFFF" opacity="0.55" />
+      </svg>
     );
   }
 

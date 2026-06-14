@@ -1,11 +1,13 @@
 import { useAuth } from "../contexts/AuthContext";
+import { useSettings } from "../contexts/SettingsContext";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, SignOut, List, User as UserIcon, IdentificationCard, Wallet, Headset, CaretDown } from "@phosphor-icons/react";
+import { Bell, SignOut, List, User as UserIcon, IdentificationCard, Wallet, Headset, CaretDown, House } from "@phosphor-icons/react";
 import { useEffect, useState, useRef } from "react";
 import { api } from "../lib/api";
 
 export default function TopNav({ onToggleSidebar }) {
   const { user, logout } = useAuth();
+  const { settings } = useSettings();
   const nav = useNavigate();
   const [notifs, setNotifs] = useState([]);
   const [open, setOpen] = useState(false);
@@ -34,13 +36,22 @@ export default function TopNav({ onToggleSidebar }) {
   return (
     <header className="glass sticky top-0 z-30 border-b border-[#E2E8F0] flex items-center justify-between px-4 lg:px-8 h-14">
       <div className="flex items-center gap-3">
-        <button className="lg:hidden text-[#64748B]" onClick={onToggleSidebar} data-testid="mobile-menu-btn" aria-label="Menü">
+        <button className="lg:hidden text-[#64748B] -ml-1 p-2 rounded-lg hover:bg-[#F1F5F9]" onClick={onToggleSidebar} data-testid="mobile-menu-btn" aria-label="Menü">
           <List size={22} />
         </button>
-        <div className="lg:hidden flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-[#16A34A] flex items-center justify-center text-white font-bold">C</div>
-          <span className="font-display text-lg">Coinberx</span>
-        </div>
+        <Link to="/" className="lg:hidden flex items-center gap-2" data-testid="topnav-brand-mobile">
+          {settings.logo_url ? (
+            <img src={settings.logo_url} alt={settings.site_name} className="h-7 max-w-[120px] object-contain" />
+          ) : (
+            <>
+              <div className="w-7 h-7 rounded-md bg-[#16A34A] flex items-center justify-center text-white font-bold">C</div>
+              <span className="font-display text-lg">{settings.site_name || "Coinberx"}</span>
+            </>
+          )}
+        </Link>
+        <Link to="/" className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]" data-testid="topnav-home-link">
+          <House size={14} /> Anasayfa
+        </Link>
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
         <span className={`hidden sm:inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium ${kycColor}`} data-testid="top-kyc-status">
@@ -98,6 +109,7 @@ export default function TopNav({ onToggleSidebar }) {
                 <div className="text-xs text-[#64748B] truncate">{user?.email}</div>
               </div>
               {[
+                { to: "/", icon: House, label: "Anasayfa" },
                 { to: "/profile", icon: UserIcon, label: "Profilim" },
                 { to: "/kyc", icon: IdentificationCard, label: "Kimlik Doğrulama (KYC)" },
                 { to: "/wallet", icon: Wallet, label: "Cüzdanım" },
